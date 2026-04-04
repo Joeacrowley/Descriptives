@@ -1,0 +1,375 @@
+---
+title: "1. Data set up"
+output: 
+  html_document:
+    df_print: kable
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 2
+    number_sections: true
+    theme: lumen
+---
+
+```{r setup, include=FALSE, cache=FALSE}
+options(scipen = NULL, digits = 4) #set to two decimal 
+```
+
+<br> 
+
+# Required packages
+
+```{r packages, collapse=T}
+library(tidyverse)
+library(srvyr)
+library(flextable)
+library(haven)
+library(labelled)
+library(huxtable)
+```
+
+<br> 
+
+# Folder
+
+```{r}
+
+ddir <- '/Users/joecrowley/R/Tables/Tables function'
+
+```
+
+# Function to display data frames
+
+```{r table quick view}
+
+df_to_dense_flextable <- function(
+    df, 
+    font_size = 8, 
+    padding = 2, 
+    merge = NULL, 
+    slice = NULL
+    ) {
+  
+  if(!is.null(slice)){df <- df %>% slice(slice)}
+  
+  ht <- df %>% as_hux %>% 
+    # set_number_format(value =  list(function(x) formatC(x, digits = 1, format = "f"))) %>% 
+    map_background_color(by_rows("#f5f7fa", "#ffffff")) %>% 
+    huxtable::set_background_color(1, everywhere, "grey95") %>% 
+    set_wrap(TRUE)
+  
+  if(!is.null(merge)){ht <- ht %>% merge_repeated_rows() %>% set_valign(value = "middle")}
+  
+  ft <- huxtable::as_flextable(ht) |>
+    flextable::fontsize(size = font_size, part = "all") |>
+    flextable::padding(padding = padding, part = "all") |>
+    flextable::theme_booktabs() |>
+    flextable::autofit()
+  
+  if(!is.null(merge)){ft <- ft %>% border(
+    border = officer::fp_border(color = "grey"),
+    # border.top = officer::fp_border(color = "grey"),
+    # border.bottom = officer::fp_border(color = "grey"), 
+    part = "body"
+    )}
+  
+  format_numeric_cells <- function(ft, data) {
+    flextable::set_formatter(
+      ft,
+      .formatter = function(x) {
+        if (is.numeric(x)) {
+          formatC(x, format = "f", digits = 1)
+        } else {
+          as.character(x)
+        }
+      }
+    )
+  }
+  
+  ft <- format_numeric_cells(ft, df)
+  
+  return(ft)
+}
+
+mtcars %>% head() %>% df_to_dense_flextable()
+mtcars %>% df_to_dense_flextable(slice = 1:7)
+mtcars %>% arrange(cyl) %>% df_to_dense_flextable(slice = 1:7, merge = T)
+
+
+
+writeLines(
+  c("df_to_dense_flextable <- ", # Assignment needs to be added manually
+  deparse(df_to_dense_flextable)), # Extract function code
+  paste0(ddir,"/df_to_dense_flextable.R")) # File name is just the function name 
+
+```
+
+# Function to save functions
+
+```{r function to save functions}
+
+write_function <- function(func_name, folder) {
+  
+  # Get the name of the function as a string
+  func_name_str <- deparse(substitute(func_name))
+  
+  # Build the assignment line
+  assign_statement <- paste0(func_name_str, " <- ")
+  
+  # Build the file path
+  file_name <- file.path(folder, paste0(func_name_str, ".R"))
+  
+  # Get the function object itself
+  function_to_export <- get(func_name_str)
+  
+  # Write to file
+  writeLines(
+    c(assign_statement, deparse(function_to_export)),
+    con = file_name
+  )
+}
+
+write_function(df_to_dense_flextable, folder = ddir)
+write_function(write_function, folder = ddir) # Save out itself for later use
+
+```
+
+<br> 
+
+## Test using saved functions
+
+```{r}
+
+rm(df_to_dense_flextable)
+source(paste0(ddir, "/df_to_dense_flextable.R"))
+
+mtcars %>% head() %>% df_to_dense_flextable()
+
+```
+
+<br> 
+
+# Set up data BSA data
+
+```{r data set up}
+
+# Load BSA teaching data
+df <- read_sav('/Users/joecrowley/R/Data/BSA Teaching Data/spss/spss25/bsa2019_poverty_open.sav', user_na = T)
+names(df)
+
+```
+
+<br>
+
+Display subset of variables to be used in table testing. 
+
+```{r}
+
+df %>% 
+  select(welfare2, leftrigh, libauth, RSex, RAgeCat, MuchPov) %>% 
+  labelled::look_for()
+
+```
+
+<br>
+
+## Data management {.tabset}
+
+### Clean and select subset of data
+
+Factorise categorical data and removes labelled values from ones I will treat as numeric. 
+
+```{r}
+
+df2 <- df %>% mutate(
+  RAgeCat = to_factor(RAgeCat), 
+  RSex = to_factor(RSex), 
+  skipmeal = to_factor(skipmeal),
+  MuchPov = to_factor(MuchPov),
+  leftrigh = remove_labels(leftrigh, keep_var_label = T, user_na_to_na = T), 
+  welfare2 = remove_labels(welfare2, keep_var_label = T, user_na_to_na = T),
+  libauth = remove_labels(libauth, keep_var_label = T, user_na_to_na = T),
+  WtFactor = remove_labels(WtFactor, keep_var_label = T, user_na_to_na = T)) %>% 
+  select(RAgeCat, RSex, skipmeal, leftrigh, welfare2, libauth, MuchPov, WtFactor)
+
+```
+
+<br> 
+
+### skipmeal
+
+```{r}
+
+df2 %>% count(skipmeal)
+df2 <- df2 %>% mutate(skipmeal2 = fct_collapse(skipmeal,
+  `Rarely or sometimes` = c("Less than once a month","Once a month","Several times a month"), 
+  Often = c("Once a week","Several times a week","Every day"), 
+  `DK/REF` = c("Can't choose","Not answered")
+))
+df2 %>% count(skipmeal2)
+```
+
+<br> 
+
+### MuchPov
+
+```{r}
+
+df2 %>% count(MuchPov)
+df2 <- df2 %>% mutate(MuchPov2 = fct_collapse(MuchPov,
+  `DK/REF` = c("Don`t know","Refusal")
+))
+df2 %>% count(MuchPov2)
+```
+
+<br> 
+
+### libauth
+
+```{r}
+
+df2 %>% count(libauth)
+df2 <- df2 %>% 
+  mutate(libauth2 = case_when(
+    libauth < 2.5 ~ 1, libauth >= 2.5 & libauth <= 3.5 ~ 2, libauth > 3.5 ~ 3, TRUE ~ NA
+    ), 
+    libauth2 = factor(libauth2, labels = c("Up to 2.5", "2.5 to 3.5", "More than 3.5"))
+    )
+df2 %>% count(libauth2, libauth)
+df2 %>% count(libauth2)
+var_label(df2$libauth2) <- "Libertarian-authoritarian scale"
+```
+
+<br> 
+
+### leftrigh
+
+```{r}
+
+
+df2 %>% count(leftrigh)
+df2 <- df2 %>% 
+  mutate(leftrigh2 = case_when(
+    leftrigh < 2.5 ~ 1, leftrigh >= 2.5 & leftrigh <= 3.5 ~ 2, leftrigh > 3.5 ~ 3, TRUE ~ NA
+    ), 
+    leftrigh2 = factor(leftrigh2, labels = c("Up to 2.5", "2.5 to 3.5", "More than 3.5"))
+    )
+df2 %>% count(leftrigh2, leftrigh)
+df2 %>% count(leftrigh2)
+var_label(df2$leftrigh2) <- "Left-right scale"
+```
+
+<br> 
+
+### welfare2
+
+```{r}
+
+
+df2 %>% count(welfare2)
+df2 <- df2 %>% 
+  mutate(welfare3 = case_when(
+    welfare2 < 2.5 ~ 1, welfare2 >= 2.5 & welfare2 <= 3.5 ~ 2, welfare2 > 3.5 ~ 3, TRUE ~ NA
+    ), 
+    welfare3 = factor(welfare3, labels = c("Up to 2.5", "2.5 to 3.5", "More than 3.5"))
+    )
+df2 %>% count(welfare3, welfare2)
+df2 %>% count(welfare3)
+var_label(df2$welfare3) <- "Left-right scale"
+```
+
+<br> 
+
+### WtFactor
+
+```{r}
+
+# WtFactor contains weights
+df_svy <- df2 %>% as_survey_design(weight = WtFactor)
+class(df_svy)
+
+```
+
+<br>
+
+## Save out BSA data
+
+```{r}
+
+save(df_svy, df2, file = paste0(ddir, "/Clean BSA data.Rds"))
+
+```
+
+<br><br>
+
+# Create multicode test data
+
+```{r}
+
+set.seed(123)
+n <- 100  # total respondents
+
+# ----- Five multi-coded Yes/No factor variables -----
+survey_data <- data.frame(
+  Q1_OptionA = factor(sample(c("Yes", "No"), n, replace = TRUE), levels = c("Yes", "No")),
+  Q1_OptionB = factor(sample(c("Yes", "No"), n, replace = TRUE), levels = c("Yes", "No")),
+  Q1_OptionC = factor(sample(c("Yes", "No"), n, replace = TRUE), levels = c("Yes", "No")),
+  Q1_OptionD = factor(sample(c("Yes", "No"), n, replace = TRUE), levels = c("Yes", "No")),
+  Q1_OptionE = factor(sample(c("Yes", "No"), n, replace = TRUE), levels = c("Yes", "No"))
+)
+
+# Add new multi-coded variables Q2_ChoiceA–E
+survey_data$Q2_ChoiceA <- factor(sample(c("Yes", "No"), n, replace = TRUE), levels = c("Yes", "No"))
+survey_data$Q2_ChoiceB <- factor(sample(c("Yes", "No"), n, replace = TRUE), levels = c("Yes", "No"))
+survey_data$Q2_ChoiceC <- factor(sample(c("Yes", "No"), n, replace = TRUE), levels = c("Yes", "No"))
+survey_data$Q2_ChoiceD <- factor(sample(c("Yes", "No"), n, replace = TRUE), levels = c("Yes", "No"))
+survey_data$Q2_ChoiceE <- factor(sample(c("Yes", "No"), n, replace = TRUE), levels = c("Yes", "No"))
+
+
+# ----- Add two non-multi-coded variables -----
+# Age group (everyone answered)
+survey_data$AgeGroup <- factor(
+  sample(c("18–24", "25–34", "35–44", "45+"), n, replace = TRUE),
+  levels = c("18–24", "25–34", "35–44", "45+")
+)
+
+# Satisfaction (missing values for some respondents → smaller base size)
+survey_data$Satisfaction <- factor(
+  sample(c("Very satisfied", "Satisfied", "Neutral", "Dissatisfied", "Very dissatisfied", NA), 
+         n, replace = TRUE, prob = c(0.15, 0.25, 0.20, 0.15, 0.15, 0.10)),
+  levels = c("Very satisfied", "Satisfied", "Neutral", "Dissatisfied", "Very dissatisfied")
+)
+
+
+# Satisfaction (missing values for some respondents → smaller base size)
+survey_data$Sex <- factor(
+  sample(c("Male", "Female", NA), 
+         n, replace = TRUE, prob = c(0.49, 0.49, 0.02)),
+  levels = c("Male", "Female")
+)
+
+# ----- Add variable labels -----
+var_label(survey_data) <- list(
+  Q1_OptionA = "Q1: Selected Option A",
+  Q1_OptionB = "Q1: Selected Option B",
+  Q1_OptionC = "Q1: Selected Option C",
+  Q1_OptionD = "Q1: Selected Option D",
+  Q1_OptionE = "Q1: Selected Option E",
+  Q2_ChoiceA = "Q2: Chose Option A",
+  Q2_ChoiceB = "Q2: Chose Option B",
+  Q2_ChoiceC = "Q2: Chose Option C",
+  Q2_ChoiceD = "Q2: Chose Option D",
+  Q2_ChoiceE = "Q2: Chose Option E",
+  AgeGroup = "Respondent age group",
+  Satisfaction = "Overall satisfaction with service", 
+  Sex = "Gender"
+)
+
+# ----- Check -----
+str(survey_data)
+var_label(survey_data)
+summary(survey_data$Satisfaction)  # See smaller valid base size
+
+save(survey_data, file = paste0(ddir, "/Multicode data.Rds"))
+
+```
