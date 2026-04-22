@@ -1,0 +1,30 @@
+body {
+  font-size: 13px;
+}
+
+h1 { font-size: 1.4em; }
+h2 { font-size: 1.2em; }
+h3 { font-size: 1.1em; }
+
+pre, code {
+  font-size: 11px;
+}
+
+.book-body .page-inner {
+  max-width: 95%;
+  padding: 5px 10px;
+}
+
+pre {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px;
+}
+
+.quarto-container {
+  max-width: 100% !important;
+}
+
+.page-columns .content {
+  max-width: 100% !important;
+}
