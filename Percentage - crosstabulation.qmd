@@ -1,0 +1,131 @@
+---
+title: "Percentages crosstab"
+format: html
+editor: visual
+---
+
+<br>
+
+## Set up
+
+```{r packages, collapse=T, message=F, warning=F}
+library(tidyverse)
+library(srvyr)
+library(flextable)
+library(haven)
+library(labelled)
+library(huxtable)
+```
+
+<br>
+
+### Load data, set up functions
+
+```{r}
+
+## Load data
+source("Set file paths.R")
+
+## Load functions
+source("Scripts/source_folder_r.R")
+source_folder_r("Scripts", verbose = T)
+
+```
+
+<br>
+
+### Base descriptions
+
+Created for use when testing later.
+
+```{r}
+
+var_descriptions <- rep("Self-completion questionnaire, asked of a random sub-set of respondents", 6)
+names(var_descriptions) <- c("leftrigh", "welfare2", "libauth", "libauth2", "leftrigh2", "welfare3") 
+var_descriptions
+
+example_of_base_information <- base_information(
+  data = df2,
+  general_base = "Asked of all respondents", 
+  specific_bases = var_descriptions
+)
+
+```
+
+<br>
+
+## Percentage crosstabulation
+
+```{r}
+
+tbl <- calc_stats(
+          data = df2, 
+          outcomes = "leftrigh2", 
+          predictors = "RAgeCat", 
+          pval = T, conf = "ci", 
+          statistics = "perc"
+          )
+
+tbl
+```
+
+```{r}
+
+make_hux <- function(table){
+  
+  (predictor_label <- table %>% select(p_lab1) %>% filter(p_lab1 != "Total") %>% unlist %>% unique)
+  
+  (n_predictor_levels <- table %>% select(p_cat1) %>% filter(p_cat1 != "Total") %>% unlist %>% unique %>% length)
+  
+  (preds_df <- tibble(var = rep(predictor_label, n_predictor_levels)) %>% t() %>% as.data.frame() %>% unname)
+
+  ht <- as_hux(preds_df, add_colnames = FALSE)
+  ht <- merge_cells(ht, 1, 1:n_predictor_levels)
+  ht <- insert_column(ht, "", after = 0)
+  ht <- insert_column(ht, "", after = 0)
+  
+  return(ht)
+  
+}
+
+top_of_table <- make_hux(table = tbl) 
+
+top_of_table %>% huxtable::theme_striped()
+
+```
+
+```{r, error=T}
+
+values <- 
+  tbl %>% select(o_cat, p_cat1, estimate, estimate_low, estimate_upp) %>% 
+  mutate_if(is.numeric, ~round(.x * 100, 1)) %>% 
+  mutate(ci = paste0("[", estimate_low, "-", estimate_upp, "]")) %>% 
+  select(-estimate_low, -estimate_upp) %>% 
+  pivot_wider(names_from = p_cat1, values_from = c(estimate, ci), names_sep = "__") %>% 
+  mutate_if(is.numeric, as.character) %>%
+  pivot_longer(cols = -o_cat, names_to = c("Statistic", "heading"), names_sep = "__") %>% 
+  pivot_wider(names_from = heading, values_from = value) %>% 
+  select(-Statistic) %>% 
+  add_row() %>%
+  add_row(.before = 1) %>%
+  add_row(.before = 1) %>%
+  mutate(
+    across(-1, ~case_when(row_number() == 1 ~ "%", TRUE ~ .x)), 
+    across(1, ~case_when(row_number() == 2 ~ outcome_label, TRUE ~ .x)) 
+  )
+
+values
+
+bases <- 
+  tbl %>% 
+  select(p_cat1, base) %>% 
+  unique() %>%
+  pivot_wider(names_from = p_cat1, values_from = base, values_fn = paste0) %>%
+  mutate(o_cat = "Unweighted base", .before = 1) 
+
+bind_rows(values, bases) %>% 
+  rename("Variables" = o_cat) %>% 
+  as_hux() %>% 
+  rbind(top_of_table, .) %>% as_flextable
+
+```

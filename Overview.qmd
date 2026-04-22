@@ -1,0 +1,115 @@
+---
+title: "Overview"
+format: html
+editor: visual
+---
+
+## Individual functions
+
+The following statistics are currently catered for: mean, median and sum for numeric outcomes, percentage and count for categorical ones.
+
+Potential additions: max, min, SD, IQR and other percentile values.
+
+These are the functin names that calculate these.
+
+**Weighted functions**:\
+\* `weighted_mean`,\
+\* `weighted_median`,\
+\* `weighted_sum`,\
+\* `weighted_perc`,\
+\* `weighted_count`.
+
+**Unweighted functions**:\
+\* `unweighted_mean`,\
+\* `unweighted_median`,\
+\* `unweighted_sum`,\
+\* `unweighted_perc`,\
+\* `unweighted_count`.
+
+An unweighted count is always calculated, stored in unweighted_n. When using `unweighted_count` it is also stored in `estimate` (it is duplicated).
+
+### Arguments
+
+The functions above have the same arguments:
+
+-   `data` - a dataframe for unweighted functions, a srvyr object for weighted functions. Unweighted functions will also accept srvyr objects.\
+-   `outcomes` - vector of otucome variable names.\
+-   `predictors` - list of predictor variable names. Each element is a vector and can be of length \> 1 to produce nested tables.\
+-   `conf` - either "se" for standard errors or "ci" for confidence intervals.\
+-   `base` - the output of the `base_information` function, a sort of data dictionary of base descriptions (requires manual specification).
+
+**Data output structure:-** a data frame, column names are...
+
+-   `cross_break` - predictor variable names separated by ' X '. If not predictor then "Total".\
+-   `outcome` - outcome variable name\
+-   `o_lab` - outcome variable label\
+-   `o_cat` - outcome variable levels, or duplicate of value in `stat` for numeric statistics.\
+-   `predictor`, `p_lab` and `p_cat` - same interpretation as for outcomes, with addition of numbers to differentiate mutliple predictors, `predictor1` for the first predictor and so on.\
+-   `stat` - contains the statistic definition.\
+-   `estimate`, contains the statistics.\
+-   `estimate_se` for standard error.\
+-   `estimate_ci` present when confidence intervals calculated, but not really used at any point.
+-   `base` - unweighted base size for statistics.\
+-   `base_description` - the output of `create_bases` for that row's selection of predictor and outcome variables.\
+-   `unweighted_n` - cell count.
+
+The values of `stat` can be:
+
+-   "mean"\
+-   "median"\
+-   "sum"\
+-   "perc"
+-   "count"\
+-   "w_mean"\
+-   "w_median"\
+-   "w_sum"\
+-   "w_perc"\
+-   "w_count"
+
+<br>
+
+## Main supporting functions
+
+### Base descriptions
+
+Consists of three functions. `base_information` collects a set of base descriptions linked to variable names. `create_bases` selects a set of those bases for a particular combination of variables used in a table, and saves them in the output in the `base_description` column. `prepare_base_for_table` then puts it in a *semi-readable* format for a table.
+
+### Multicodes
+
+This checks to see if there is a common stem among some of the variables, which must be the case in both variable and variable labels. If there is, it reduces the variable names to that common stem and splits the variable label in two, taking the common stem to become the new variable label and placing the unique parts in the position of categories, over-writing 'yes'. The 'no' responses are then filtered out. This is only done where all variables with the common stem also have the same base size. The result is an output that in the data frame appears to relate to a single variable and can afterwards be treated as one. It also includes a step to combine their base labels into a single label - really these should all be the same anyway.
+
+<br>
+
+## A wrapper - calc_stats
+
+**Arguments**, mostly the same as in the individual functions.
+
+`pval` - if not NULL, then compute p-values for single predictor. No method for nested variables.
+
+`multicode` - this calls a supporting function to identify and format multicode variables.
+
+`statistics` - specifices which statistics to calculate. The allowed values allowed are:
+
+-   "mean"\
+-   "median"\
+-   "sum"\
+-   "perc"\
+-   "count"\
+-   "w_mean"\
+-   "w_median"\
+-   "w_sum"\
+-   "w_perc"\
+-   "w_count"
+
+Accepts multiple arguments. By default... c("count","mean").
+
+**Data output structure:-** remains the same as for individual statistic functions with two additions:
+
+-   `p_method` - the description of what significance test has been run,\
+-   `p_value` - a p-value, when you have a single predictor, this will be the output.
+
+<br>
+
+## Edits
+
+<br><br><br>

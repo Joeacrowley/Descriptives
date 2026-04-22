@@ -1,0 +1,720 @@
+---
+title: "Multicodes"
+format: html
+editor: visual
+---
+
+<br> 
+
+## Set up
+
+```{r packages, collapse=T, message=F, warning=F}
+library(tidyverse)
+library(srvyr)
+library(flextable)
+library(haven)
+library(labelled)
+library(huxtable)
+```
+
+<br> 
+
+### Load data, set up functions
+
+```{r}
+
+## Load data
+source("Set file paths.R")
+
+## Load functions
+source("Scripts/source_folder_r.R")
+source_folder_r("Scripts", verbose = T)
+
+data_table_presets <- function(data){
+      DT::datatable(
+    data,
+    class = "compact stripe hover nowrp",
+    options = list(
+      scrollX = TRUE,
+      pageLength = 25,
+      autoWidth = TRUE
+    ),
+    rownames = FALSE
+  ) 
+}
+
+```
+
+<br>
+
+### Base descriptions
+
+Created for use when testing later. 
+
+```{r}
+
+var_descriptions <- rep("Self-completion questionnaire, asked of a random sub-set of respondents", 6)
+names(var_descriptions) <- c("leftrigh", "welfare2", "libauth", "libauth2", "leftrigh2", "welfare3") 
+var_descriptions
+
+example_of_base_information <- base_information(
+  data = df2,
+  general_base = "Asked of all respondents", 
+  specific_bases = var_descriptions
+)
+
+example_of_base_information[[1]]
+
+example_of_base_information[[2]]
+
+example_of_base_information[[3]]
+
+example_of_base_information[[4]]
+
+```
+
+<br> 
+
+## Identify Multicodes {.tabset}
+
+### Steps overview
+
+This code identifies variables with: a) a stem divider, I will use ": ", b) a matching set of values on the left hand side of the stem divider, c) No more than 2 unique values in its levels, and d) the same base size.
+
+So, the variable labels will be split in two around ": ". A multicode set is one where all the left hand sides of the resulting variable are the same.
+
+But how to identify matching sets?
+
+Once done it will replace variable label with the left hand part of the stem.
+
+The response levels will be filtered to 'yes' or equivalent. 'yes' will be a specifiable argument, e.g. could be 'mentioned'.
+
+For simplicity, I'll **assume** binaries be coded consistently, e.g. people don't feed in a combination of yes/no and mentioned/not mentioned questions.
+
+It will replace variable level == 'yes' with the right hand part of the stem.
+
+Variable name will be reduced to the stem that is consistent across all variables in that set. Not dealt yet with the possibility that there is no consistent stem.
+
+Base description will be updated to have a single base description for the variable as a whole, using the left hand part of the stem as the variable label.
+
+This new base description will be silently added to the object with *base description* in it, in these trials that is `example_of_base_information`.
+
+Should I then drop duplicates from the base description info? Probably, yes.
+
+<br>
+
+### Test data
+
+#### Base information
+
+```{r}
+
+var_descriptions <- rep("Self-completion questionnaire", 5)
+names(var_descriptions) <- c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC", "Q1_OptionD", "Q1_OptionE") 
+
+
+example_of_base_information2 <- base_information(
+  data = survey_data,
+  general_base = "Asked of all respondents", 
+  specific_bases = var_descriptions
+)
+
+example_of_base_information2
+
+example_of_base_information2[[1]]
+
+example_of_base_information2[[2]]
+
+example_of_base_information2[[3]]
+
+example_of_base_information2[[4]]
+
+```
+
+<br>
+
+#### Test table 1
+
+```{r}
+
+trial1 <- calc_stats(
+    survey_data, 
+    base = example_of_base_information2, 
+    outcomes = c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC", "Q1_OptionD", "Q1_OptionE", 
+                 "Q2_ChoiceA", "Q2_ChoiceB", "Q2_ChoiceC", "Q2_ChoiceD", "Q2_ChoiceE",
+                 "AgeGroup", "Satisfaction"),
+    conf = "se") 
+
+trial1 %>% print()
+trial1 %>% glimpse
+
+```
+
+#### Test table 2
+
+```{r}
+
+trial2 <- calc_stats(
+    survey_data, 
+    base = example_of_base_information2, 
+    outcomes = c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC", "Q1_OptionD", "Q1_OptionE", 
+                 "Q2_ChoiceA", "Q2_ChoiceB", "Q2_ChoiceC", "Q2_ChoiceD", "Q2_ChoiceE", 
+                 "Satisfaction"),
+    predictors = "AgeGroup",
+    conf = "se") 
+
+trial2 %>% print()
+trial2 %>% glimpse
+trial2$base_description %>% unique()
+```
+
+#### Test table 1
+
+```{r}
+trial3 <- calc_stats(
+    survey_data, 
+    base = example_of_base_information2, 
+    outcomes = c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC", "Q1_OptionD", "Q1_OptionE", 
+                 "Q2_ChoiceA", "Q2_ChoiceB", "Q2_ChoiceC", "Q2_ChoiceD", "Q2_ChoiceE"),
+    predictors = list(c("AgeGroup","Satisfaction")),
+    conf = "se") 
+
+trial3 %>% print()
+trial3 %>% glimpse
+trial3$base_description %>% unique()
+
+```
+
+<br><br>
+
+### Convenience function to reduce variable names to a common stem
+
+This takes a vector of variable names and returns a single character value with the common parts of the strings in that vector, assuming there is one.
+
+```{r}
+
+# Example vector of multi-coded variable names
+vars <- c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC", "Q1_OptionD", "Q1_OptionE")
+
+# Find longest common prefix
+common_prefix <- function(x) {
+  split_names <- strsplit(x, "")
+  min_length <- min(lengths(split_names))
+  prefix <- character(0)
+  for (i in seq_len(min_length)) {
+    chars <- sapply(split_names, `[`, i)
+    if (length(unique(chars)) == 1) {
+      prefix <- c(prefix, chars[1])
+    } else {
+      break
+    }
+  }
+  paste0(prefix, collapse = "")
+}
+
+write_function(common_prefix, folder = "Scripts")
+
+common_prefix(vars)
+# [1] "Q1_Option"
+
+set1 <- c("Q2_Fruit_Apple", "Q2_Fruit_Banana", "Q2_Fruit_Cherry", "Q2_Fruit_Grape", "Q2_Fruit_Mango")
+common_prefix(set1)
+
+set6 <- c("Q4FruitApple", "Q4FruitBanana", "Q4FruitCherry", "Q4FruitGrape", "Q4FruitMango")
+common_prefix(set6)
+
+# If no common prefix, returns a string of zero length which will cause an error. Hmmmm. 
+common_prefix(c("last","frui"))
+
+```
+
+<br>
+
+### Intial variable screening
+
+The first stage narrows the data frame received from `calc_stats` down to suitable rows:
+
+1.  `stat` must equal "perc" or "count",\
+2.  `o_lab` must contain ": ",\
+3.  The outcome variable must contain either 1 or 2 levels,\
+4.  Those levels must include the *relevant* value, for now "yes". Could be user specified.
+
+<br>
+
+5.  For these rows of data it them creates a variable called `left_stem`, which contains the values on the left hand side of ": ". This will be the variable label for the new multicode variable.
+
+<br>
+
+6.  There must be more than one variable with a consistent left_stem value.\
+7.  The `base` value must be the same within unique values of left_stem.
+
+The resulting output is a dataframe with only the relevant rows of data from the output of `calc_stats`.
+
+```{r}
+
+multis <- trial2 %>% 
+  filter(stat == "perc" | stat == "count") %>% # Multicodes relevant only for categorical data
+  filter(grepl(": ", o_lab)) %>% # Label must contain ": "
+  group_by(across(contains(c("cross_break", "p_cat"))), outcome) %>% # Group by outcome variable
+  mutate(lev_num = max(row_number())) %>% # Count number of levels in each variable
+  group_by(outcome) %>% 
+  mutate(lev_relevant = case_when(any(o_cat == "Yes") ~ 1, TRUE ~ 0)) %>% # Any of variable's levels equal yes? 
+  filter(
+    lev_num <= 2 & # Only use variables with 1 or 2 levels
+    lev_relevant == 1 # Only use variables with a relevant level, here 'yes'
+    )  %>% 
+  mutate(
+    left_stem = str_split_i(o_lab, ": ", 1) # Create left variable label stem 
+    ) %>% 
+  group_by(across(contains(c("crossbreak", "p_cat"))), left_stem) %>% # Group by predictors and left stem
+  mutate(
+    stem_count = n_distinct(outcome), # number of different variables with that variable stem 
+    base_count = n_distinct(base) # Number of unique values in base
+    ) %>% 
+  filter(stem_count > 1) %>% # Only use variables where right stem recurs more than once
+  filter(base_count == 1)  # Only use variables where base is unique within left_stem
+
+multis
+
+# Create an identifier vector for multicode rows from: 
+#  -  cross_break (all the predictors), 
+#  -  and the outcome variable.
+# Then reduce that to a vector of unique values
+multicode_row_identifiers <-  multis %>% unite(ident, c(cross_break, outcome)) %>% pull(ident) %>% unique
+multicode_row_identifiers
+
+# Use `multicode_row_identifiers` to drop these rows from the original table.
+single_codes <- trial2 %>% unite(ident, c(cross_break, outcome), remove = F) %>% 
+  filter(!ident %in% multicode_row_identifiers) %>% 
+  select(-ident)
+
+```
+
+### Reorganise data identified as multicoded
+
+```{r}
+
+# The next step is done separately for each unique multicode set and predictor combination 
+# Identified with left_stem2, created below. 
+# Results returned as a list from map()
+
+# If the column "cross_break" exists in the dataframe 'multis'...
+if("cross_break" %in% names(multis)){
+  # ...then create a new column 'left_stem2' by combining 'left_stem' and 'cross_break'
+  multis <- multis %>% mutate(left_stem2 = paste0(left_stem, " - ", cross_break))
+} else {
+  # ...otherwise, just copy 'left_stem' into 'left_stem2'
+  multis <- multis %>% mutate(left_stem2 = left_stem)
+}
+
+multis
+
+
+# The following line is commented out — for testing 
+# stem <- unique_stems[2]
+
+
+# Get all unique values of 'left_stem2' in the data
+unique_stems <- multis$left_stem2 %>% unique
+
+# Loop over each unique value of 'left_stem2'
+result <- map(unique_stems, function(stem) {
+  
+  # Filter 'multis' to only the rows matching the current stem
+  multis2 <- multis %>% 
+    filter(left_stem2 == stem) 
+  
+  # Save the original variable label from the first row (for later use)
+  old_variable_label <- multis2$o_lab[1]
+  
+  # Step 1: Create a 'right_stem' by splitting 'o_lab' on ": " and taking the second part
+  # Step 2: Replace 'o_lab' with the value of 'left_stem'
+  multis2 <- multis2 %>%
+    mutate(
+      right_stem = str_split_i(o_lab, ": ", 2), 
+      o_lab = left_stem
+    ) %>% 
+    # Step 3: Keep only rows where 'o_cat' == "Yes"
+    filter(o_cat == "Yes") %>% 
+    # Step 4: Replace 'o_cat' with 'right_stem' values, and shorten 'outcome' to its common prefix
+    mutate(
+      o_cat = right_stem, 
+      outcome = common_prefix(outcome)
+    ) 
+  
+  # Get the unique new variable name
+  new_variable_name <- multis2$outcome %>% unique()
+  # Get the unique new variable label
+  new_variable_label <- multis2$o_lab %>% unique
+  # Name the label vector with the new variable name
+  names(new_variable_label) <- new_variable_name
+  
+  # Get the existing base description from the first row
+  existing_base_description <- multis2$base_description[1]
+  
+  # If the base description contains " X ", split it into two parts
+  if(str_detect(existing_base_description, " X ")){
+    existing_base_description_2 <- str_split(existing_base_description, " X ") %>% unlist
+  } else {
+    # Otherwise, keep it as is
+    existing_base_description_2 <- existing_base_description
+  }
+  
+  # Create a logical index for which part(s) match the old variable label
+  index <- str_detect(existing_base_description_2, old_variable_label)
+  reverse_index <- !str_detect(existing_base_description_2, old_variable_label)
+  
+  # Extract the matching part(s) and remove anything after ":- "
+  existing_base_description_3 <- existing_base_description_2[index] %>% str_split_i(., ":- ", 1)
+  
+  # Create a revised base label by appending the new variable label
+  revised_base_label <- paste0(existing_base_description_3, ":- ", new_variable_label)
+  names(revised_base_label) <- new_variable_name
+  
+  # If the base description originally had " X ", reassemble with the unchanged part(s)
+  if(str_detect(existing_base_description, " X ")){
+    remainder_of_base_description <- existing_base_description_2[reverse_index] 
+    revised_base_description <- paste(
+      revised_base_label, 
+      remainder_of_base_description, 
+      sep = " X ")
+  } else {
+    revised_base_description <- revised_base_label
+  }
+  
+  # Update 'base_description' in the filtered dataset
+  multis2 <- multis2 %>% mutate(base_description = revised_base_description)
+  
+  # Logical test: stop execution if the new variable name already exists in 'example_of_base_information2'
+  if (new_variable_name %in% names(example_of_base_information2)) {
+    stop("Error: New multicode variable name already in data.")
+  } 
+  
+  # Return a list containing:
+  # 1. The updated 'multis2' dataframe
+  # 2. The revised base label
+  # 3. The new variable label
+  return(list(multis2, revised_base_label, new_variable_label))
+  
+}) 
+# End of map() loop
+
+# Combine all first elements of 'result' (the dataframes) into one big dataframe
+tables <- bind_rows(map(result, ~(.x[[1]])))
+
+# Extract all base labels from the results, flatten into one vector, and remove duplicates
+new_base_descriptors <- map(result, ~(.x[[2]])) %>% unlist
+new_base_descriptors <- new_base_descriptors[!duplicated(new_base_descriptors)]
+
+# Extract all variable labels from the results, flatten, and remove duplicates
+new_variable_labels <- map(result, ~(.x[[3]])) %>% unlist
+new_variable_labels <- new_variable_labels[!duplicated(new_variable_labels)]
+
+# Make a temporary copy of 'example_of_base_information2'
+example_of_base_information2_temp <- example_of_base_information2
+
+# Append new base descriptors and labels to positions [[2]], [[3]], and [[4]] of that object
+example_of_base_information2_temp[[2]] <- c(example_of_base_information2[[2]], new_base_descriptors)
+example_of_base_information2_temp[[3]] <- c(example_of_base_information2[[3]], new_variable_labels)
+example_of_base_information2_temp[[4]] <- c(example_of_base_information2[[4]], new_variable_labels)
+
+# Overwrite the original 'example_of_base_information2' object in the global environment with the updated version
+example_of_base_information2 <<- example_of_base_information2_temp
+
+multis2 <- tables %>% ungroup() %>% select(-lev_num, -lev_relevant, -left_stem, -stem_count, -base_count, -left_stem2, -right_stem)
+
+# Review: original data, multicode data, and single code data...
+trial2 %>% glimpse
+multis2 %>% glimpse
+multicode_row_identifiers %>% glimpse
+
+# Bind single and multicode data together
+bind_rows(single_codes, multis2)
+
+```
+
+<br>
+
+### Fuction
+
+```{r}
+
+  # filter(stat == "perc" | stat == "count") %>% # Multicodes relevant only for categorical data
+  # filter(grepl(": ", o_lab)) %>% # Label must contain ": "
+  # group_by(across(contains(c("cross_break", "p_cat"))), outcome) %>% # Group by outcome variable
+  # mutate(lev_num = max(row_number())) %>% # Count number of levels in each variable
+  # group_by(outcome) %>% 
+  # mutate(lev_relevant = case_when(any(o_cat == "Yes") ~ 1, TRUE ~ 0)) %>% # Any of variable's levels equal yes? 
+
+# data <- trial3
+# base_info <- example_of_base_information2
+# rm(data)
+# rm(base_info)
+# rm(keep)
+
+convert_multicodes <- function(
+  data, 
+  base_info = NULL, 
+  keep = "Yes"){
+  
+  if(!is.null(base_info)){base_info_name_as_string <- deparse(substitute(base_info))}
+  
+  multis <- data %>% 
+    filter(stat == "perc" | stat == "count" | stat == "w_count" | stat == "w_perc") %>% # Multicodes relevant only for categorical data
+    filter(grepl(": ", o_lab)) %>% # Label must contain ": "
+    
+    # Count number of levels in each variable
+    group_by(across(contains(c("cross_break", "p_cat"))), outcome) %>% # Group by outcome variable + crossbreak set + levels
+    mutate(lev_num = max(row_number())) %>% 
+    
+    # Any of variable's levels equal yes?
+    group_by(outcome) %>% 
+    mutate(lev_relevant = case_when(any(o_cat == "Yes") ~ 1, TRUE ~ 0)) %>%  
+    
+    # filter non-relevant variables
+    filter(
+      lev_num <= 2 & # Only use variables with 1 or 2 levels
+      lev_relevant == 1 # Only use variables with a relevant level, here 'yes'
+      )  %>% 
+    mutate(
+      left_stem = str_split_i(o_lab, ": ", 1) # Create left variable label stem 
+      ) %>% 
+    group_by(across(contains(c("crossbreak", "p_cat"))), left_stem) %>% # Group by predictors and left stem
+    mutate(
+      stem_count = n_distinct(outcome), # number of different variables with that variable stem 
+      base_count = n_distinct(base) # Number of unique values in base
+      ) %>% 
+    filter(stem_count > 1) %>% # Only use variables where right stem recurs more than once
+    filter(base_count == 1)  # Only use variables where base is unique within left_stem
+  
+  if(nrow(multis) > 0){
+  
+  # Create an identifier vector for multicode rows from: 
+  #  -  cross_break (all the predictors), 
+  #  -  and the outcome variable.
+  # Then reduce that to a vector of unique values
+  multicode_row_identifiers <-  multis %>% unite(ident, contains(c("cross_break", "outcome"))) %>% pull(ident) %>% unique
+  multicode_row_identifiers
+  
+  # Use `multicode_row_identifiers` to drop these rows from the original table.
+  single_codes <- data %>% unite(ident, contains(c("cross_break", "outcome")), remove = F) %>% 
+    filter(!ident %in% multicode_row_identifiers) %>% 
+    select(-ident)
+
+  # The next step is done separately for each unique multicode set and predictor combination 
+  # Identified with left_stem2, created below. 
+  # Results returned as a list from map()
+  
+  # If the column "cross_break" exists in the dataframe 'multis'...
+  if("cross_break" %in% names(multis)){
+    # ...then create a new column 'left_stem2' by combining 'left_stem' and 'cross_break'
+    multis <- multis %>% mutate(left_stem2 = paste0(left_stem, " - ", cross_break))
+  } else {
+    # ...otherwise, just copy 'left_stem' into 'left_stem2'
+    multis <- multis %>% mutate(left_stem2 = left_stem)
+  }
+  
+  # Get all unique values of 'left_stem2' in the data
+  unique_stems <- multis$left_stem2 %>% unique
+  # stem <- unique_stems[[2]]
+  
+    # Loop over each unique value of 'left_stem2'
+    result <- map(unique_stems, function(stem) {
+    
+    # Filter 'multis' to only the rows matching the current stem
+    multis2 <- multis %>% filter(left_stem2 == stem) 
+    
+    # Save the original variable label from the first row (for later use)
+    old_variable_label <- multis2$o_lab[1]
+    
+    # Step 1: Create a 'right_stem' by splitting 'o_lab' on ": " and taking the second part
+    # Step 2: Replace 'o_lab' with the value of 'left_stem'
+    multis2 <- multis2 %>% ungroup() %>%
+      mutate(
+        right_stem = str_split_i(o_lab, ": ", 2), 
+        o_lab = left_stem
+      ) %>% 
+      # Step 3: Keep only rows where 'o_cat' == "Yes"
+      filter(o_cat == "Yes") %>% 
+      # Step 4: Replace 'o_cat' with 'right_stem' values, and shorten 'outcome' to its common prefix
+      mutate(
+        o_cat = right_stem, 
+        outcome = common_prefix(outcome)
+      ) 
+    
+    # Skip base description related steps where base_info NULL
+    if(!is.null(base_info)){
+        
+      # Get the unique new variable name
+      new_variable_name <- multis2$outcome %>% unique()
+      # Get the unique new variable label
+      new_variable_label <- multis2$o_lab %>% unique
+      # Name the label vector with the new variable name
+      names(new_variable_label) <- new_variable_name
+      
+      # Get the existing base description from the first row
+      existing_base_description <- multis2$base_description[1]
+      
+      # If the base description contains " X ", split it into two parts
+      if(str_detect(existing_base_description, " X ")){
+        existing_base_description_2 <- str_split(existing_base_description, " X ") %>% unlist
+      } else {
+        # Otherwise, keep it as is
+        existing_base_description_2 <- existing_base_description
+      }
+      
+      # Create a logical index for which part(s) match the old variable label
+      index <- str_detect(existing_base_description_2, old_variable_label)
+      reverse_index <- !str_detect(existing_base_description_2, old_variable_label)
+      
+      # Extract the matching part(s) and remove anything after ":- "
+      existing_base_description_3 <- existing_base_description_2[index] %>% str_split_i(., ":- ", 1)
+      
+      # Create a revised base label by appending the new variable label
+      revised_base_label <- paste0(existing_base_description_3, ":- ", new_variable_label)
+      names(revised_base_label) <- new_variable_name
+      
+      # If the base description originally had " X ", reassemble with the unchanged part(s)
+      if(str_detect(existing_base_description, " X ")){
+        remainder_of_base_description <- existing_base_description_2[reverse_index] 
+        revised_base_description <- paste0(
+          c(revised_base_label, remainder_of_base_description), 
+          collapse = " X ")
+      } else {
+        revised_base_description <- revised_base_label
+      }
+      
+      # Update 'base_description' in the filtered dataset
+      multis2 <- multis2 %>% mutate(base_description = revised_base_description)
+      
+      # Logical test: drop existing variable names from 'base_info'
+      if (new_variable_name %in% names(base_info[[3]])) {
+        
+        keep_item_2 <- which(!(base_info[[2]] %>% names()) %in% new_variable_name)
+        keep_item_3 <- which(!(base_info[[3]] %>% names()) %in% new_variable_name)
+        keep_item_4 <- which(!(base_info[[4]] %>% names()) %in% new_variable_name)
+        base_info[[2]] <- base_info[[2]][keep_item_2]
+        base_info[[3]] <- base_info[[3]][keep_item_3]
+        base_info[[4]] <- base_info[[4]][keep_item_4]
+
+        # stop("Error: New multicode variable name already in data.")
+      } 
+      
+      # Where base description provided, return a list containing:
+      #  1. The updated 'multis2' dataframe
+      #  2. The revised base label
+      #  3. The new variable label
+      return(list(multis2, revised_base_label, new_variable_label))
+    
+    } else {
+      
+      return(list(multis2)) # Otherwise, simply return data frame, in a list so map() below will work
+      
+    }
+    
+    }) # End of map() loop
+  
+  # Combine all first elements of 'result' (the dataframes) into one big dataframe
+  tables <- bind_rows(map(result, ~(.x[[1]])))
+  
+  # Skip base description related steps where base_info NULL
+  if(!is.null(base_info)){
+    
+    # Extract all base labels from the results, flatten into one vector, and remove duplicates
+    new_base_descriptors <- map(result, ~(.x[[2]])) %>% unlist
+    new_base_descriptors <- new_base_descriptors[!duplicated(new_base_descriptors)]
+    
+    # Extract all variable labels from the results, flatten, and remove duplicates
+    new_variable_labels <- map(result, ~(.x[[3]])) %>% unlist
+    new_variable_labels <- new_variable_labels[!duplicated(new_variable_labels)]
+    
+    # Make a temporary copy of 'base_info'
+    example_of_base_info2_temp <- base_info
+    
+    # If those variable names already exist in base descriptions information, then drop them...
+    base_info[[2]] <- base_info[[2]][which(!base_info[[2]] %in% new_base_descriptors)]
+    base_info[[3]] <- base_info[[3]][which(!base_info[[3]] %in% new_variable_labels)]
+    base_info[[4]] <- base_info[[4]][which(!base_info[[4]] %in% new_variable_labels)]
+
+    # Append new base descriptors and labels to positions [[2]], [[3]], and [[4]] of that object
+    example_of_base_info2_temp[[2]] <- c(base_info[[2]], new_base_descriptors)
+    example_of_base_info2_temp[[3]] <- c(base_info[[3]], new_variable_labels)
+    example_of_base_info2_temp[[4]] <- c(base_info[[4]], new_variable_labels)
+    
+    # Overwrite the original 'base_info' object in the global environment with the updated version
+    assign(base_info_name_as_string, example_of_base_info2_temp, envir = .GlobalEnv)
+    # base_info <<- example_of_base_info2_temp
+  
+  }
+  
+  # Create multicode object to export
+  multis2 <- tables %>% 
+    ungroup() %>% # Otherwise, cannot drop left_stem
+    # Drop temporary variables
+    select(-lev_num, -lev_relevant, -left_stem, -stem_count, -base_count, -left_stem2, -right_stem)
+  
+  # Bind single and multicode data together
+  multicoded_and_single_code_data <- bind_rows(single_codes, multis2)
+  
+  return(multicoded_and_single_code_data)
+  
+  } else {return(data)}
+  
+}
+
+write_function(convert_multicodes, folder = "Scripts")
+
+
+```
+
+<br>
+
+#### Test multicode conversion {.tabset}
+
+##### Test 1
+
+```{r}
+
+convert_multicodes(
+  data = trial1, 
+  base_info = example_of_base_information2, 
+  keep = "Yes") %>% df_to_dense_flextable()
+
+```
+
+<br>
+
+##### Test 2
+
+```{r}
+convert_multicodes(
+  data = trial2, 
+  base_info = example_of_base_information2, 
+  keep) %>% 
+  df_to_dense_flextable()
+
+```
+
+<br>
+
+##### Test 3
+
+```{r}
+rm(base_info)
+convert_multicodes(
+  data = trial3 %>% mutate(base=NA,base_description=NA), 
+  base_info = NULL,
+  # base_info = example_of_base_information2, 
+  keep) %>% 
+  df_to_dense_flextable()
+
+convert_multicodes(
+  data = trial3, 
+  base_info = example_of_base_information2,
+  keep) %>% 
+  df_to_dense_flextable()
+
+```
+
+<br><br><br>
+

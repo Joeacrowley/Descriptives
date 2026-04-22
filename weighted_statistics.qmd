@@ -1,0 +1,770 @@
+---
+title: "Weighted statistics"
+format: html
+editor: visual
+---
+
+<br> 
+
+## Set up
+
+```{r packages, collapse=T, message=F, warning=F}
+library(tidyverse)
+library(srvyr)
+library(flextable)
+library(haven)
+library(labelled)
+library(huxtable)
+```
+
+<br> 
+
+### Load data, set up functions
+
+```{r}
+
+## Load data
+source("Set file paths.R")
+
+## Load functions
+source("Scripts/source_folder_r.R")
+source_folder_r("Scripts", verbose = T)
+
+data_table_presets <- function(data){
+      DT::datatable(
+    data,
+    class = "compact stripe hover nowrp",
+    options = list(
+      scrollX = TRUE,
+      pageLength = 25,
+      autoWidth = TRUE
+    ),
+    rownames = FALSE
+  ) 
+}
+
+```
+
+<br>
+
+### Base descriptions
+
+Created for use when testing later. 
+
+```{r}
+
+var_descriptions <- rep("Self-completion questionnaire, asked of a random sub-set of respondents", 6)
+names(var_descriptions) <- c("leftrigh", "welfare2", "libauth", "libauth2", "leftrigh2", "welfare3") 
+var_descriptions
+
+example_of_base_information <- base_information(
+  data = df2,
+  general_base = "Asked of all respondents", 
+  specific_bases = var_descriptions
+)
+
+```
+
+## Weighted functions 
+
+* Numeric variables - `weighted_mean`.    
+* Numeric variables - `weighted_median`.    
+* Numeric variables - `weighted_sum`.    
+* Categorical variables - `weighted_perc`.    
+* Categorical variables - `weighted_count`.      
+
+
+### Weighted means
+
+```{r weighted mean}
+
+weighted_mean <- function(
+    data, # a srvyr design object
+    outcomes, # a character vector of outcome variables
+    predictors = NULL, # a list, each element containing a character vector of predictor variables
+    conf = NULL, # "se" or "ci"; returns either standard error or confidence intervals
+    base = NULL
+) {suppressMessages({suppressWarnings({
+  
+  output <- map(outcomes, function(cur_outcome) {
+    
+    base_defintion <- ifelse(is.null(base), NA, create_bases(base_info = base, variables = cur_outcome)) # edit
+    
+    # Remove missing data
+    one_total_table <- data %>% 
+      filter(!is.na(.data[[cur_outcome]])) %>% 
+      summarise(estimate = survey_mean(!!sym(cur_outcome), vartype = conf), 
+                base = unweighted(n())) %>% 
+        mutate("{cur_outcome}" := "w_mean") %>% 
+        mutate(outcome = cur_outcome) %>% 
+        rename(any_of(c(o_cat = cur_outcome))) %>% 
+        mutate(o_lab = attributes(data$variables[[cur_outcome]])$label) %>% 
+      # edit
+      mutate(base_description = base_defintion) # descriptor label for base 
+
+    # Create cross-breaks
+    if(!is.null(predictors)){
+    predictor_tables <- map(predictors, function(cur_predictor) { 
+      
+            # Handle cases with and without predictor variables
+        if (length(cur_predictor) > 0) {
+          
+          # Vector containing predictors and outcomes
+          predictor_and_outcome <- c(cur_predictor, cur_outcome)
+          base_defintion <- ifelse(is.null(base), NA, create_bases(base_info = base, variables = predictor_and_outcome)) # edit
+          
+          one_predictor_table <- data %>%
+            # Filter missing values
+            filter(rowSums(across(all_of(predictor_and_outcome), ~ is.na(.))) == 0) %>%
+            # Group data
+            group_by(across(all_of(cur_predictor))) %>% 
+            # Weighted mean + base sizes, with grouping vars
+            summarise(estimate = survey_mean(!!sym(cur_outcome), vartype = conf), 
+                      base = unweighted(n())) %>% 
+            # Added for consistency when merged with categorical outcome tables. 
+            mutate("{cur_outcome}" := "w_mean") %>% 
+            # Standardise names so can stack results across different predictors and outcomes. 
+            standardise_names(data = data, preds = cur_predictor, out_var = cur_outcome) %>%
+            mutate(cross_break = paste0(cur_predictor, collapse = "_X_")) %>%
+            # edit
+            mutate(base_description = base_defintion) # descriptor label for base 
+        
+        }
+      
+      return(one_predictor_table)
+      
+    })
+    
+    predictor_tables <- bind_rows(predictor_tables)
+    
+    } # Predictors ends
+    
+    # Bind crossbreaks and frequency table together
+    if(!is.null(predictors)){table_for_one_outcome <- bind_rows(one_total_table, predictor_tables)
+    } else {table_for_one_outcome <- one_total_table}
+    
+    table_for_one_outcome <- table_for_one_outcome %>%
+      # Record statistic calculated
+      mutate(stat = "w_mean") %>%
+      # Add 'Total' to predictor category variables for frequency section of the table.
+      mutate(across(contains(c("cross_break", "predictor", "p_lab", "p_cat")), ~case_when(is.na(.x) ~ "Total", TRUE ~ .x))) %>%
+      # Reorder variables
+      select(contains(c("cross_break", "predictor", "p_lab", "p_cat")), outcome, o_lab, o_cat, stat, contains("estimate"), base, base_description) # edit
+    
+    if(!is.null(conf)){
+    if(conf == "ci"){
+      table_for_one_outcome <- table_for_one_outcome %>% 
+        mutate(estimate_ci = paste0(as.character(estimate_low), " - ", as.character(estimate_upp)))}
+    } else { 
+      table_for_one_outcome <- table_for_one_outcome %>% mutate(estimate_se = "-", .after = estimate)
+      }
+
+    return(table_for_one_outcome)
+    
+  }) # Outcomes loop ends 
+  
+  output <- output %>% bind_rows() %>% mutate(unweighted_n = base)
+  
+  return(output)
+  
+})})
+}
+
+write_function(weighted_mean, folder = "Scripts")
+
+```
+
+### Trials 
+
+#### Trial 1
+
+```{r}
+
+trial1 <- weighted_mean(df_svy, outcomes = c("libauth","leftrigh"), predictors = list("RSex"))
+trial1 %>% glimpse
+trial1 %>% print()
+print(trial1)
+```
+
+<br> 
+
+#### Trial 2
+
+```{r}
+
+trial2 <- weighted_mean(df_svy, outcomes = c("libauth","leftrigh"), predictors = list("RSex","RAgeCat"), conf = "se") 
+trial2 %>% glimpse
+trial2 %>% print()
+
+```
+
+<br> 
+
+#### Trial 3
+
+```{r}
+
+trial3 <- weighted_mean(df_svy, outcomes = c("libauth","leftrigh"), predictors = list(c("RSex","RAgeCat")), base = example_of_base_information) 
+trial3 %>% glimpse
+trial3 %>% print()
+trial3$base_description %>% unique
+
+```
+
+<br> 
+
+#### Trial 4
+
+```{r}
+
+trial4 <- weighted_mean(df_svy, outcomes = c("libauth"), predictors = list(c("RSex","RAgeCat")), conf = "ci") 
+trial4 %>% glimpse
+trial4 %>% print()
+
+```
+
+<br> 
+
+#### Trial 5
+
+```{r}
+
+trial5 <- weighted_mean(df_svy, outcomes = c("libauth","welfare2","leftrigh"), conf = "ci", base = example_of_base_information) 
+trial5 %>% glimpse
+trial5 %>% print()
+
+
+```
+
+<br> 
+
+## Weighted medians
+
+```{r weighted median}
+
+weighted_median <- function(
+    data, # a srvyr design object
+    outcomes, # a character vector of outcome variables
+    predictors = NULL, # a list, each element containing a character vector of predictor variables
+    conf = NULL, # "se" or "ci"; returns either standard error or confidence intervals 
+    base = NULL
+) {suppressMessages({suppressWarnings({
+  
+  output <- map(outcomes, function(cur_outcome) {
+    # Remove missing data
+    base_defintion <- ifelse(is.null(base), NA, create_bases(base_info = base, variables = cur_outcome)) # edit
+
+    one_total_table <- data %>% 
+      filter(!is.na(.data[[cur_outcome]])) %>% 
+      summarise(estimate = survey_median(!!sym(zap_labels(cur_outcome)), vartype = conf), 
+                base = unweighted(n())) %>% 
+        mutate("{cur_outcome}" := "w_median") %>% 
+        mutate(outcome = cur_outcome) %>% 
+        rename(any_of(c(o_cat = cur_outcome))) %>% 
+        mutate(o_lab = attributes(data$variables[[cur_outcome]])$label) %>% 
+      mutate(base_description = base_defintion) # descriptor label for base 
+  
+    # Create cross-breaks
+    if(!is.null(predictors)){
+    predictor_tables <- map(predictors, function(cur_predictor) { 
+      
+            # Handle cases with and without predictor variables
+        if (length(cur_predictor) > 0) {
+          
+          # Vector containing predictors and outcomes
+          predictor_and_outcome <- c(cur_predictor, cur_outcome)
+          base_defintion <- ifelse(is.null(base), NA, create_bases(base_info = base, variables = predictor_and_outcome))
+          
+          one_predictor_table <- data %>%
+            # Filter missing values
+            filter(rowSums(across(all_of(predictor_and_outcome), ~ is.na(.))) == 0) %>%
+            # Group data
+            group_by(across(all_of(cur_predictor))) %>% 
+            # Weighted median + base sizes, with grouping vars
+            summarise(estimate = survey_median(!!sym(zap_labels(cur_outcome)), vartype = conf),
+                      base = unweighted(n())) %>% 
+            # Added for consistency when merged with categorical outcome tables. 
+            mutate("{cur_outcome}" := "w_median") %>% 
+            # Standardise names so can stack results across different predictors and outcomes. 
+            standardise_names(data = data, preds = cur_predictor, out_var = cur_outcome) %>%
+            mutate(cross_break = paste0(cur_predictor, collapse = "_X_")) %>%
+            mutate(base_description = base_defintion) # descriptor label for base 
+        }
+      
+      return(one_predictor_table)
+      
+    })
+    
+    predictor_tables <- bind_rows(predictor_tables)
+    
+    } # Predictors ends
+    
+    # Bind crossbreaks and frequency table together
+    if(!is.null(predictors)){table_for_one_outcome <- bind_rows(one_total_table, predictor_tables)
+    } else {table_for_one_outcome <- one_total_table}
+    
+    table_for_one_outcome <- table_for_one_outcome %>%
+      # Record statistic calculated
+      mutate(stat = "w_median") %>%
+      # Add 'Total' to predictor category variables for frequency section of the table.
+      mutate(across(contains(c("cross_break", "predictor", "p_lab", "p_cat")), ~case_when(is.na(.x) ~ "Total", TRUE ~ .x))) %>%
+      # Reorder variables
+      select(contains(c("cross_break", "predictor", "p_lab", "p_cat")), outcome, o_lab, o_cat, stat, contains("estimate"), base, base_description) 
+    
+    if(!is.null(conf)){
+      if(conf == "ci"){
+        table_for_one_outcome <- table_for_one_outcome %>% 
+          mutate(estimate_ci = paste0(as.character(estimate_low), " - ", as.character(estimate_upp)))}
+    } else { 
+      table_for_one_outcome <- table_for_one_outcome %>% mutate(estimate_se = "-", .after = estimate)
+    }
+
+    return(table_for_one_outcome)
+    
+  }) # Outcomes loop ends 
+  
+  output <- output %>% bind_rows() %>% mutate(unweighted_n = base)
+  
+  return(output)
+  
+})})
+}
+
+write_function(weighted_median, folder = "Scripts")
+
+```
+
+<br> 
+
+### Trials 
+
+#### Trial 1
+
+```{r}
+
+trial1 <- weighted_median(df_svy, outcomes = c("libauth","leftrigh"), predictors = list("RSex","RAgeCat")) 
+trial1 %>% glimpse()
+trial1 %>% print()
+
+```
+
+<br> 
+
+#### Trial 2
+
+```{r}
+
+trial2 <- weighted_median(df_svy, outcomes = c("libauth"), predictors = list(c("RSex","RAgeCat","skipmeal"))) 
+trial2 %>% glimpse()
+trial2 %>% print()
+
+```
+
+<br> 
+
+#### Trial 3
+
+```{r}
+
+trial3 <- weighted_median(df_svy, outcomes = c("libauth"), conf = "ci", base = example_of_base_information) 
+trial3 %>% glimpse()
+trial3 %>% print()
+
+```
+
+<br> 
+
+## Weighted sums
+
+```{r weighted sum}
+
+weighted_sum <- function(
+    data, # a srvyr design object
+    outcomes, # a character vector of outcome variables
+    predictors = NULL, # a list, each element containing a character vector of predictor variables
+    conf = NULL, # "se" or "ci"; returns either standard error or confidence intervals 
+    base = NULL
+) {suppressMessages({suppressWarnings({
+  
+  output <- map(outcomes, function(cur_outcome) {
+    
+    base_defintion <- ifelse(is.null(base), NA, create_bases(base_info = base, variables = cur_outcome)) 
+    
+    # Remove missing data
+    one_total_table <- data %>% 
+      filter(!is.na(.data[[cur_outcome]])) %>% 
+      summarise(estimate = survey_total(!!sym(zap_labels(cur_outcome)), vartype = conf), 
+                base = unweighted(n())) %>% 
+        mutate("{cur_outcome}" := "w_sum") %>%
+        mutate(outcome = cur_outcome) %>% 
+        rename(any_of(c(o_cat = cur_outcome))) %>% 
+        mutate(o_lab = attributes(data$variables[[cur_outcome]])$label) %>% 
+      mutate(base_description = base_defintion) # descriptor label for base 
+  
+    # Create cross-breaks
+    if(!is.null(predictors)){
+    predictor_tables <- map(predictors, function(cur_predictor) { 
+      
+            # Handle cases with and without predictor variables
+        if (length(cur_predictor) > 0) {
+          
+          # Vector containing predictors and outcomes
+          predictor_and_outcome <- c(cur_predictor, cur_outcome)
+          base_defintion <- ifelse(is.null(base), NA, create_bases(base_info = base, variables = predictor_and_outcome)) 
+          
+          one_predictor_table <- data %>%
+            # Filter missing values
+            filter(rowSums(across(all_of(predictor_and_outcome), ~ is.na(.))) == 0) %>%
+            # Group data
+            group_by(across(all_of(cur_predictor))) %>% 
+            # Weighted median + base sizes, with grouping vars
+            summarise(estimate = survey_total(!!sym(zap_labels(cur_outcome)), vartype = conf),
+                      base = unweighted(n())) %>% 
+            # Added for consistency when merged with categorical outcome tables. 
+            mutate("{cur_outcome}" := "w_sum") %>%
+            # Standardise names so can stack results across different predictors and outcomes. 
+            standardise_names(data = data, preds = cur_predictor, out_var = cur_outcome) %>%
+            mutate(cross_break = paste0(cur_predictor, collapse = "_X_")) %>%
+            mutate(base_description = base_defintion) # descriptor label for base 
+        }
+      
+      return(one_predictor_table)
+      
+    })
+    
+    predictor_tables <- bind_rows(predictor_tables)
+    
+    } # Predictors ends
+    
+    # Bind crossbreaks and frequency table together
+    if(!is.null(predictors)){table_for_one_outcome <- bind_rows(one_total_table, predictor_tables)
+    } else {table_for_one_outcome <- one_total_table}
+    
+    table_for_one_outcome <- table_for_one_outcome %>%
+      mutate(stat = "w_sum") %>%
+      # Add 'Total' to predictor category variables for frequency section of the table.
+      mutate(across(contains(c("cross_break", "predictor", "p_lab", "p_cat")), ~case_when(is.na(.x) ~ "Total", TRUE ~ .x))) %>%
+      # Reorder variables
+      select(contains(c("cross_break", "predictor", "p_lab", "p_cat")), outcome, o_lab, o_cat, stat, contains("estimate"), base, base_description) 
+        
+    if(!is.null(conf)){
+      if(conf == "ci"){
+        table_for_one_outcome <- table_for_one_outcome %>% 
+          mutate(estimate_ci = paste0(as.character(estimate_low), " - ", as.character(estimate_upp)))}
+    } else { 
+      table_for_one_outcome <- table_for_one_outcome %>% mutate(estimate_se = "-", .after = estimate)
+    }
+
+    return(table_for_one_outcome)
+    
+  }) # Outcomes loop ends 
+  
+  output <- output %>% bind_rows() %>% mutate(unweighted_n = base)
+  
+  return(output)
+  
+})})
+}
+
+write_function(weighted_sum, folder = "Scripts")
+
+
+```
+
+<br>
+
+### Trials 
+
+#### Trial 1
+
+```{r}
+trial1 <- weighted_sum(df_svy, outcomes = c("libauth","leftrigh"), predictors = list("RSex","RAgeCat")) 
+trial1 %>% glimpse()
+trial1 %>% print()
+```
+
+<br> 
+
+#### Trial 2
+
+```{r}
+trial2 <- weighted_sum(df_svy, outcomes = c("libauth"), predictors = list(c("RSex","RAgeCat","skipmeal")), base = example_of_base_information)
+trial2 %>% glimpse
+trial2 %>% print()
+```
+
+<br> 
+
+#### Trial 3
+
+```{r}
+
+trial3 <- weighted_sum(df_svy, outcomes = c("libauth", "leftrigh"), predictors = list("RSex"), conf = "ci")
+trial3 %>% glimpse()
+trial3 %>% print()
+
+```
+
+<br><br> 
+
+## Weighted percentages
+
+```{r weighted percentages}
+
+weighted_perc <- function(
+    data, # a srvyr design object
+    outcomes, # a character vector of outcome variables
+    predictors = NULL, # a list, each element containing a character vector of predictor variables
+    conf = NULL, # "se" or "ci"; returns either standard error or confidence intervals 
+    base = NULL
+) {suppressMessages({suppressWarnings({
+  
+  output <- map(outcomes, function(cur_outcome) {
+    
+    base_defintion <- ifelse(is.null(base), NA, create_bases(base_info = base, variables = cur_outcome)) # edit
+    
+    # Remove missing data
+    one_total_table <- data %>% 
+      filter(!is.na(.data[[cur_outcome]])) %>% 
+      group_by(across(all_of(cur_outcome))) %>% 
+      summarise(estimate = survey_prop(vartype = conf), 
+                unweighted_n = unweighted(n())) %>% 
+      mutate(base = sum(unweighted_n, na.rm = T)) %>%
+      mutate(outcome = cur_outcome) %>% 
+      rename(any_of(c(o_cat = cur_outcome))) %>% 
+      mutate(o_lab = attributes(data$variables[[cur_outcome]])$label) %>% 
+      mutate(base_description = base_defintion) # descriptor label for base 
+  
+    # Create cross-breaks
+    if(!is.null(predictors)){
+    predictor_tables <- map(predictors, function(cur_predictor) { 
+  
+            # Handle cases with and without predictor variables
+        if (length(cur_predictor) > 0) {
+          
+          # Vector containing predictors and outcomes
+          predictor_and_outcome <- c(cur_predictor, cur_outcome)
+          base_defintion <- ifelse(is.null(base), NA, create_bases(base_info = base, variables = predictor_and_outcome)) # edit
+          
+          one_predictor_table <- data %>%
+            # Filter missing values
+            filter(rowSums(across(all_of(predictor_and_outcome), ~ is.na(.))) == 0) %>%
+            # Group data
+            group_by(across(all_of(predictor_and_outcome))) %>% 
+            # Weighted percentage + base sizes, with grouping vars
+            summarise(estimate = survey_prop(vartype = conf), 
+                      unweighted_n = unweighted(n())) %>% 
+            mutate(base = sum(unweighted_n, na.rm = T)) %>%
+            # Standardise names so can stack results across different predictors and outcomes. 
+            standardise_names(data = data, preds = cur_predictor, out_var = cur_outcome) %>%
+            mutate(cross_break = paste0(cur_predictor, collapse = "_X_")) %>%
+            mutate(base_description = base_defintion) # descriptor label for base 
+        }
+      
+      return(one_predictor_table)
+      
+    })
+    
+    predictor_tables <- bind_rows(predictor_tables)
+    
+    } # Predictors ends
+    
+    # Bind crossbreaks and frequency table together
+    if(!is.null(predictors)){table_for_one_outcome <- bind_rows(one_total_table, predictor_tables)
+    } else {table_for_one_outcome <- one_total_table}
+    
+    table_for_one_outcome <- table_for_one_outcome %>%
+      mutate(stat = "w_perc") %>%
+      # Add 'Total' to predictor category variables for frequency section of the table.
+      mutate(across(contains(c("cross_break", "predictor", "p_lab", "p_cat")), ~case_when(is.na(.x) ~ "Total", TRUE ~ .x))) %>%
+      # Reorder variables
+      select(contains(c("cross_break", "predictor", "p_lab", "p_cat")), outcome, o_lab, o_cat, stat, contains("estimate"), base, base_description, unweighted_n) 
+    
+    if(!is.null(conf)){
+      if(conf == "ci"){
+        table_for_one_outcome <- table_for_one_outcome %>% 
+          mutate(estimate_ci = paste0(as.character(estimate_low), " - ", as.character(estimate_upp)))}
+    } else { 
+      table_for_one_outcome <- table_for_one_outcome %>% mutate(estimate_se = "-", .after = estimate)
+    }
+
+    return(table_for_one_outcome)
+    
+  }) # Outcomes loop ends 
+  
+  output <- output %>% bind_rows() %>% mutate(unweighted_n = base)
+  
+  return(output)
+  
+})})
+}
+
+write_function(weighted_perc, folder = "Scripts")
+
+
+```
+
+<br> 
+
+### Trials 
+
+<br> 
+
+#### Trial 1
+
+```{r}
+trial <- weighted_perc(df_svy, outcomes = c("skipmeal"), predictors = list("RSex","RAgeCat")) 
+trial %>% glimpse()
+trial %>% print()
+
+```
+
+<br> 
+
+#### Trial 2
+
+```{r}
+trial2 <- weighted_perc(df_svy, outcomes = c("MuchPov"), predictors = list(c("RSex","RAgeCat","skipmeal")), base = example_of_base_information) 
+trial2 %>% glimpse
+trial2 %>% print()
+```
+
+<br><br> 
+
+## Weighted count
+
+```{r weighted count}
+
+weighted_count <- function(
+    data, # a srvyr design object
+    outcomes, # a character vector of outcome variables
+    predictors = NULL, # a list, each element containing a character vector of predictor variables
+    conf = NULL, # "se" or "ci"; returns either standard error or confidence intervals 
+    base = NULL
+) {suppressMessages({suppressWarnings({
+  
+  output <- map(outcomes, function(cur_outcome) {
+    
+    base_defintion <- ifelse(is.null(base), NA, create_bases(base_info = base, variables = cur_outcome)) # edit
+
+    # Remove missing data
+    one_total_table <- data %>% 
+      filter(!is.na(.data[[cur_outcome]])) %>% 
+      group_by(across(all_of(cur_outcome))) %>% 
+      summarise(estimate = survey_total(vartype = conf), 
+                unweighted_n = unweighted(n())) %>% 
+      mutate(base = sum(unweighted_n, na.rm = T)) %>%
+      mutate(outcome = cur_outcome) %>% 
+      rename(any_of(c(o_cat = cur_outcome))) %>% 
+      mutate(o_lab = attributes(data$variables[[cur_outcome]])$label) %>% 
+      mutate(base_description = base_defintion) # descriptor label for base 
+  
+  
+    # Create cross-breaks
+    if(!is.null(predictors)){
+    predictor_tables <- map(predictors, function(cur_predictor) { 
+  
+            # Handle cases with and without predictor variables
+        if (length(cur_predictor) > 0) {
+          
+          # Vector containing predictors and outcomes
+          predictor_and_outcome <- c(cur_predictor, cur_outcome)
+          base_defintion <- ifelse(is.null(base), NA, create_bases(base_info = base, variables = predictor_and_outcome)) # edit
+          
+          one_predictor_table <- data %>%
+            # Filter missing values
+            filter(rowSums(across(all_of(predictor_and_outcome), ~ is.na(.))) == 0) %>%
+            # Group data
+            group_by(across(all_of(predictor_and_outcome))) %>% 
+            # Weighted percentage + base sizes, with grouping vars
+            summarise(estimate = survey_total(vartype = conf), 
+                unweighted_n = unweighted(n())) %>% 
+            mutate(base = sum(unweighted_n, na.rm = T)) %>%
+            # Standardise names so can stack results across different predictors and outcomes. 
+            standardise_names(data = data, preds = cur_predictor, out_var = cur_outcome) %>%
+            mutate(cross_break = paste0(cur_predictor, collapse = "_X_")) %>%
+            mutate(base_description = base_defintion) # descriptor label for base 
+        }
+      
+      return(one_predictor_table)
+      
+    })
+    
+    predictor_tables <- bind_rows(predictor_tables)
+    
+    } # Predictors ends
+    
+    # Bind crossbreaks and frequency table together
+    if(!is.null(predictors)){table_for_one_outcome <- bind_rows(one_total_table, predictor_tables)
+    } else {table_for_one_outcome <- one_total_table}
+    
+    table_for_one_outcome <- table_for_one_outcome %>%
+      mutate(stat = "w_count") %>%
+      # Add 'Total' to predictor category variables for frequency section of the table.
+      mutate(across(contains(c("cross_break", "predictor", "p_lab", "p_cat")), ~case_when(is.na(.x) ~ "Total", TRUE ~ .x))) %>%
+      # Reorder variables
+      select(contains(c("cross_break", "predictor", "p_lab", "p_cat")), outcome, o_lab, o_cat, stat, contains("estimate"), base, base_description, unweighted_n) 
+
+    if(!is.null(conf)){
+      if(conf == "ci"){
+        table_for_one_outcome <- table_for_one_outcome %>% 
+          mutate(estimate_ci = paste0(as.character(estimate_low), " - ", as.character(estimate_upp)))}
+    } else { 
+      table_for_one_outcome <- table_for_one_outcome %>% mutate(estimate_se = "-", .after = estimate)
+    }
+    
+    return(table_for_one_outcome)
+    
+  }) # Outcomes loop ends 
+  
+  output <- output %>% bind_rows()
+  
+  return(output)
+  
+})})
+}
+
+write_function(weighted_count, folder = "Scripts")
+
+
+```
+
+<br>
+
+### Trials 
+
+#### Trial 1
+
+```{r}
+
+trial <- weighted_count(df_svy, outcomes = c("skipmeal"), predictors = list("RSex","RAgeCat")) 
+trial %>% glimpse()
+trial %>% print()
+
+```
+
+<br> 
+
+#### Trial 2
+
+```{r}
+
+trial <- weighted_count(df_svy, outcomes = c("MuchPov"), predictors = list(c("RSex","RAgeCat","skipmeal")), base = example_of_base_information) 
+trial %>% glimpse
+trial %>% print()
+
+```
+
+<br>
+
+#### Trial 3
+
+```{r}
+
+trial <- weighted_count(df_svy, outcomes = c("MuchPov"), conf = "ci") 
+trial %>% glimpse()
+trial %>% print()
+
+```
+
+<br>

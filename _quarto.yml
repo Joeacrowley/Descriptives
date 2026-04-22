@@ -1,0 +1,30 @@
+project:
+  type: book
+
+book:
+  title: "Descriptive analysis in R"
+  author: "JC"
+  chapters:
+    - index.qmd
+    - part: "Set up"
+      chapters:
+        - set_up.qmd
+    - part: "Calculating Descriptive Statistics"
+      chapters:
+        - Overview.qmd
+        - helper_functions.qmd
+        - unweighted_statistics.qmd
+        - weighted_statistics.qmd
+        - calculate_statistics.qmd
+        - Multicodes.qmd
+    - part: "Applied examples"
+      chapters:
+        - Percentage - crosstabulation.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 4
+    page-layout: full
+    css: dense-notes.css

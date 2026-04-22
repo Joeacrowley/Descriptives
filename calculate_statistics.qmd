@@ -1,0 +1,527 @@
+---
+title: "Calculate statistics"
+format: html
+editor: visual
+---
+
+<br>
+
+## Set up
+
+```{r packages, collapse=T, message=F, warning=F}
+library(tidyverse)
+library(srvyr)
+library(flextable)
+library(haven)
+library(labelled)
+library(huxtable)
+```
+
+<br>
+
+### Load data, set up functions
+
+```{r}
+
+## Load data
+source("Set file paths.R")
+
+## Load functions
+source("Scripts/source_folder_r.R")
+source_folder_r("Scripts", verbose = T)
+
+data_table_presets <- function(data){
+      DT::datatable(
+    data,
+    class = "compact stripe hover nowrp",
+    options = list(
+      scrollX = TRUE,
+      pageLength = 25,
+      autoWidth = TRUE
+    ),
+    rownames = FALSE
+  ) 
+}
+
+```
+
+<br>
+
+### Base descriptions
+
+::: panel-tabset
+#### Base descriptions BSA
+
+Created for use when testing later.
+
+```{r}
+
+var_descriptions <- rep("Self-completion questionnaire, asked of a random sub-set of respondents", 6)
+names(var_descriptions) <- c("leftrigh", "welfare2", "libauth", "libauth2", "leftrigh2", "welfare3") 
+var_descriptions
+
+example_of_base_information <- base_information(
+  data = df2,
+  general_base = "Asked of all respondents", 
+  specific_bases = var_descriptions
+)
+
+example_of_base_information[[1]]
+
+example_of_base_information[[2]]
+
+example_of_base_information[[3]]
+
+example_of_base_information[[4]]
+
+```
+
+#### Multicodes base information
+
+```{r}
+
+var_descriptions <- rep("Self-completion questionnaire", 5)
+names(var_descriptions) <- c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC", "Q1_OptionD", "Q1_OptionE") 
+
+
+example_of_base_information2 <- base_information(
+  data = survey_data,
+  general_base = "Asked of all respondents", 
+  specific_bases = var_descriptions
+)
+
+example_of_base_information2
+
+example_of_base_information2[[1]]
+
+example_of_base_information2[[2]]
+
+example_of_base_information2[[3]]
+
+example_of_base_information2[[4]]
+
+```
+
+<br>
+:::
+
+<br>
+
+## Error testing
+
+::: panel-tabset
+### Handle nested predictors
+
+Examples of outcome structures. `nested_predictors` won't work, will cause an error. `predictors_one_level` is one that will work, a single level list, each element a character vector of variable length.
+
+```{r}
+
+nested_predictors <- 
+list(
+  list("MuchPov", "RSex", "RAgeCat"), 
+  list(c("skipmeal", "RAgeCat"), "MuchPov2")
+) 
+
+nested_predictors
+
+predictors_one_level <- list(c("skipmeal", "RAgeCat"), "MuchPov2")
+
+predictors_one_level
+
+```
+
+<br>
+
+### Confirm list depth
+
+This function then returns list depth. If depth equals 1 then use same predictors for all outcomes. If depth equals 2 then try and use different sets of predictors for different outcomes.
+
+```{r}
+
+list_depth <- function(x) {
+  if (!is.list(x)) {
+    return(0)  # Not a list → depth 0
+  } else if (length(x) == 0) {
+    return(1)  # Empty list → depth 1
+  } else {
+    return(1 + max(sapply(x, list_depth)))
+  }
+}
+
+write_function(list_depth, folder = "Scripts")
+
+# Use for test to ensure list depth = 1. 
+list_depth(nested_predictors)
+list_depth(predictors_one_level)
+
+```
+
+<br>
+
+### Confirm variables exist
+
+```{r}
+
+# Returns TRUE if all variables in list appear in data
+# Otherwise returns FALSE
+vars_exist <- function(variable_list, data){
+  
+  if(any(grepl("survey", class(data)))){
+    df_to_check <- data[["variables"]]
+    } else {
+      df_to_check <- data
+      }
+  
+  predictors <- variable_list %>% unlist %>% unique
+  variables_in_df <- names(df_to_check)
+  
+  variables_in_both <- intersect(predictors, variables_in_df)
+  
+  length(predictors) == length(variables_in_both)
+
+  }
+
+vars_exist(data = df2, variable_list = nested_predictors)
+vars_exist(data = df_svy, variable_list = nested_predictors)
+vars_exist(data = df2, variable_list = list("Random text")) # Random text not a variable name. 
+write_function(vars_exist, folder = "Scripts")
+
+```
+
+<br>
+
+### Confirm predictors are factors.
+
+```{r}
+
+check_all_factors <- function(data, variable_list){
+
+  if(any(grepl("survey", class(data)))){
+    df_to_check <- data[["variables"]]
+    } else {
+      df_to_check <- data
+      }
+  
+  df_to_check %>% select(all_of(unlist(variable_list))) %>%
+    map_chr(., ~paste0(class(.x), collapse = ", ")) %>% 
+    unique == "factor"
+}
+
+check_all_factors(data = df2, variable_list = nested_predictors)
+check_all_factors(data = df_svy, variable_list = nested_predictors)
+write_function(check_all_factors, folder = "Scripts")
+
+```
+
+<br>
+
+### Confirm outcomes not in predictors list
+
+Returns TRUE when no overlap between predictors and outcomes
+
+```{r}
+
+(vector_of_outcomes = c("libauth","welfare2", "leftrigh"))
+predictors_one_level
+
+outcomes_not_in_predictors <- function(outcomes, predictors){
+
+  predictor_vector <- unlist(predictors) %>% unique
+  overlap_of_predictors_and_outcomes <- intersect(outcomes, predictor_vector)
+  length(overlap_of_predictors_and_outcomes) == 0
+  
+}
+
+outcomes_not_in_predictors(vector_of_outcomes, predictors_one_level)
+write_function(outcomes_not_in_predictors, folder = "Scripts")
+
+```
+
+<br>
+:::
+
+## Wrapper to combine things - calc_stats
+
+**Checks:**
+
+-   Confirm outcomes not in list of predictors `outcomes_not_in_predictors`.
+
+```{r}
+
+calc_stats <- function(
+    data,
+    outcomes, # Character vector of outcome variables
+    predictors = NULL, # a list, usually each element contains a character vector of predictor variables
+    statistics = c("count","mean"),  # default, unweighted count or mean
+    conf = NULL, # "se" or "ci"
+    base = NULL, 
+    pval = NULL, # Whether to compute p-values (if not NULL)
+    multicode = TRUE
+    ){
+  
+  # Correct common, non-harmful, and inevitable mistakes #######################
+  
+  # If `predictors` is a character vector put it in a list
+  if(class(predictors) == "character"){predictors <- list(predictors)}
+  
+  
+  # Error handling #############################################################
+
+  # Check variables do, in fact, exist. 
+  vector_of_variables_concerned <- c(outcomes, unlist(unique(predictors)))
+  test <- vars_exist(data = data, variable_list = vector_of_variables_concerned)
+  if (test != TRUE) stop("Some variables you want to use do not exist in the data frame.")
+
+  if(!is.null(predictors)){
+    
+  # Check outcomes not in predictors
+  test <- outcomes_not_in_predictors(outcomes = outcomes, predictors = predictors)
+  if (test != TRUE) stop("Outcome appears in predictor list.")
+
+  # Confirm predictors are factors
+    test <- check_all_factors(data = data, variable_list = predictors)
+    if (test != TRUE) stop("Not all predictors are factor variables. Make them factors.")
+  
+  # Check predictor list depth is 1
+  test <- list_depth(predictors) == 1
+  if (test != TRUE) stop("Predictor list should not contained further lists.")
+  }
+  
+  suppressMessages({suppressWarnings({ 
+    
+  # Where necessary, extract unweighted data from survey objects  
+  if(any(str_detect(class(data), "survey"))){
+    unweighted_data <- data[["variables"]]
+    weighted_data <- data
+  } else {
+      unweighted_data <- data
+      weighted_data <- NULL
+  }
+    
+  # Compute statistics for each outcome/predictor combination 
+  individual_tables <- pmap(list(outcomes), function(cur_outcome){
+    
+    # Extract current outcome variable and filter statistics based on variable type
+    single_outcome <- unweighted_data %>% pull(cur_outcome) 
+    if(is.factor(single_outcome)){statistic <- str_remove_all(statistics, "mean|median|sum")}
+    if(is.numeric(single_outcome)){statistic <- str_remove_all(statistics, "perc|count")}
+    
+    results <- list() # Store stat results for this combo
+
+    if("mean" %in% statistic){results <- append(results, list(unweighted_mean(unweighted_data, outcomes = cur_outcome, predictors = predictors, conf = conf, base = base)))}
+    if("median" %in% statistic){results <- append(results, list(unweighted_median(unweighted_data, outcomes = cur_outcome, predictors = predictors, conf = conf, base = base)))}
+    if("sum" %in% statistic){results <- append(results, list(unweighted_sum(unweighted_data, outcomes = cur_outcome, predictors = predictors, conf = conf, base = base)))}
+    if("perc" %in% statistic){results <- append(results, list(unweighted_perc(unweighted_data, outcomes = cur_outcome, predictors = predictors, conf = conf, base = base)))}
+    if("count" %in% statistic){results <- append(results, list(unweighted_count(unweighted_data, outcomes = cur_outcome, predictors = predictors, conf = conf, base = base)))}
+    
+    if(!is.null(weighted_data)){
+    if("w_mean" %in% statistic){results <- append(results, list(weighted_mean(weighted_data, outcomes = cur_outcome, predictors = predictors, conf = conf, base = base)))}
+    if("w_median" %in% statistic){results <- append(results, list(weighted_median(weighted_data, outcomes = cur_outcome, predictors = predictors, conf = conf, base = base)))}
+    if("w_sum" %in% statistic){results <- append(results, list(weighted_sum(weighted_data, outcomes = cur_outcome, predictors = predictors, conf = conf, base = base)))}
+    if("w_perc" %in% statistic){results <- append(results, list(weighted_perc(weighted_data, outcomes = cur_outcome, predictors = predictors, conf = conf, base = base)))}
+    if("w_count" %in% statistic){results <- append(results, list(weighted_count(weighted_data, outcomes = cur_outcome, predictors = predictors, conf = conf, base = base)))}
+    }
+    
+    # Combine results for this outcome
+    if(length(results) > 0){results <- results %>% reduce(bind_rows)}
+
+    return(results)
+  
+  })
+
+  # Merge all results into one table 
+  merged_tables <- individual_tables %>% bind_rows
+  
+  if(!is.null(pval)){
+    
+    # Extract predictors eligible for p-value testing (only single variables)
+    pvalue_preds <- predictors[predictors %>% map_lgl(., ~length(.x) == 1)]
+    pvalue_preds <- pvalue_preds %>% unlist %>% unique
+    
+  pvalues <- list()
+  
+  # Unweighted p-values
+  if(any(statistics %in% c("mean","median","sum","perc","count"))){
+    unw_pvalues <- map_return_p_values(data = unweighted_data, outcomes  = outcomes, predictors = pvalue_preds)
+    pvalues <- append(pvalues, list(unw_pvalues))
+  }
+
+  # Weighted p-values
+  if(!is.null(weighted_data)){
+    if(any(statistics %in% c("w_mean", "w_median", "w_sum", "w_perc", "w_count"))){
+      wgt_pvalues <- map_return_p_values(data = data, outcomes  = outcomes, predictors = pvalue_preds)
+      pvalues <- append(pvalues, list(wgt_pvalues))
+      }
+  }
+  
+  # Merge p-values into main results
+  pvalues <- pvalues %>% bind_rows()
+  merged_tables <- merged_tables %>% left_join(pvalues)
+  
+  } else { 
+    # If no p-values requested, still add empty columns
+    merged_tables <- merged_tables %>% mutate(p_method = NA, p_value = NA)
+  }
+  
+  # Handle the case of no predictors (total summary) 
+  if(is.null(predictors)){merged_tables <- merged_tables %>% mutate(cross_break = "Total")}
+  
+  # Convert multi-coded values using base info
+  # Inserted if statement so that if mulitcodes functions not available, can be excluded. 
+  if(multicode == T){
+  merged_tables <- convert_multicodes(
+    data = merged_tables,  
+    base_info = base, 
+    keep = "Yes"
+    ) 
+  }
+
+  return(merged_tables)
+  
+})})
+}
+
+write_function(calc_stats, folder = "Scripts")
+
+```
+
+<br>
+
+#### Tests
+
+::: panel-tabset
+##### Test 1
+
+```{r, eval = F}
+
+test1 <- calc_stats(data = df_svy, 
+           outcomes = c("RAgeCat","libauth", "welfare3"), 
+           predictors = list(c("RSex","skipmeal2","MuchPov2"), "RSex"),
+           statistics = c("w_perc","mean"), 
+           base = example_of_base_information,
+           conf = "ci", pval = T) 
+
+
+test1 %>% print(n=1000)
+
+test1 %>% pull(p_value)
+
+```
+
+<br>
+
+##### Test 2
+
+```{r, eval = T}
+calc_stats(data = df2, 
+           outcomes = list("libauth","welfare2", "leftrigh"), 
+           predictors = list("RSex", "RAgeCat", "MuchPov2"), 
+           pval = T) %>% df_to_dense_flextable()
+
+
+```
+
+<br>
+
+##### Test 3
+
+```{r, eval = T}
+calc_stats(data = df2, 
+           outcomes = c("libauth","welfare2", "leftrigh"), 
+           predictors = list(c("RSex", "RAgeCat"), "MuchPov2"), 
+           pval = T) %>% 
+  print(n=1000)
+
+```
+
+<br>
+
+##### Test 4.
+
+```{r, eval = T}
+
+calc_stats(data = df2, 
+           outcomes = c("libauth","welfare2", "leftrigh"), 
+           predictors = list("RSex", "RAgeCat", "MuchPov2", c("RSex", "MuchPov2")),
+           pval = T) %>%
+  print(n=1000)
+
+
+```
+
+<br>
+
+##### Test 5
+
+```{r, eval = T, error = T}
+
+nested_predictors
+
+calc_stats(data = df2, 
+           outcomes = c("libauth","welfare2"), 
+           predictors = nested_predictors,
+           pval = T) %>% df_to_dense_flextable()
+
+```
+
+<br>
+
+##### Test 6
+
+```{r, eval = T}
+
+trial2 <- calc_stats(
+    survey_data, 
+    base = example_of_base_information2, 
+    outcomes = c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC", "Q1_OptionD", "Q1_OptionE", 
+                 "Q2_ChoiceA", "Q2_ChoiceB", "Q2_ChoiceC", "Q2_ChoiceD", "Q2_ChoiceE", 
+                 "Satisfaction"),
+    predictors = "AgeGroup",
+    conf = "se") 
+
+trial2
+
+```
+
+##### Test 7
+
+```{r, eval = T}
+
+test7 <- calc_stats(data = df_svy, 
+           outcomes = c("RAgeCat","libauth", "welfare3"), 
+           ## predictors = list(c("RSex","skipmeal2","MuchPov2")),
+           statistics = c("w_perc","mean"), 
+           base = example_of_base_information,
+           conf = "ci") %>% print(n=1000)
+
+```
+
+##### Test 8
+
+```{r, error = T}
+
+test7 <- calc_stats(data = df_svy, 
+           outcomes = c("RAgeCat","libauth", "welfare3", "RSex"), 
+           predictors = list("RSex"),
+           statistics = c("w_perc","mean"), 
+           base = example_of_base_information,
+           conf = "ci") %>% print(n=1000)
+
+```
+
+<br>
+
+##### Test 9
+
+```{r, error = T}
+
+test8 <- calc_stats(data = df_svy, 
+           outcomes = c("RAgeCat","libauth", "welfare3", "rsex"), 
+           # predictors = list("RSex"),
+           statistics = c("w_perc","mean"), 
+           base = example_of_base_information,
+           conf = "ci") %>% print(n=1000)
+
+
+```
+:::

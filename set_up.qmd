@@ -1,23 +1,12 @@
 ---
-title: "1. Data set up"
-output: 
-  html_document:
-    df_print: kable
-    toc: true
-    toc_float: true
-    toc_collapsed: true
-    toc_depth: 2
-    number_sections: true
-    theme: lumen
+title: "Set up"
+format: html
+editor: visual
 ---
-
-```{r setup, include=FALSE, cache=FALSE}
-options(scipen = NULL, digits = 4) #set to two decimal 
-```
 
 <br> 
 
-# Required packages
+## Required packages
 
 ```{r packages, collapse=T}
 library(tidyverse)
@@ -30,15 +19,25 @@ library(huxtable)
 
 <br> 
 
-# Folder
+## Folder
 
-```{r}
+The code below will set file paths to load data. 
 
-ddir <- '/Users/joecrowley/R/Tables/Tables function'
+```{r, eval = F}
+source("Set file paths.R")
+```
+
+At present it really only does this, but more may be added later. 
+
+```{r, eval = F}
+
+ddir <- "/Users/joecrowley/R/Data/BSA Teaching Data/spss/spss25"
+load(paste0(ddir, "/Multicode data.Rds"))
+load(paste0(ddir, "/Clean BSA data.Rds"))
 
 ```
 
-# Function to display data frames
+## Function to display data frames
 
 ```{r table quick view}
 
@@ -100,11 +99,11 @@ mtcars %>% arrange(cyl) %>% df_to_dense_flextable(slice = 1:7, merge = T)
 writeLines(
   c("df_to_dense_flextable <- ", # Assignment needs to be added manually
   deparse(df_to_dense_flextable)), # Extract function code
-  paste0(ddir,"/df_to_dense_flextable.R")) # File name is just the function name 
+  "Scripts/df_to_dense_flextable.R") # File name is just the function name 
 
 ```
 
-# Function to save functions
+## Function to save functions
 
 ```{r function to save functions}
 
@@ -129,19 +128,19 @@ write_function <- function(func_name, folder) {
   )
 }
 
-write_function(df_to_dense_flextable, folder = ddir)
-write_function(write_function, folder = ddir) # Save out itself for later use
+write_function(df_to_dense_flextable, folder = "Scripts")
+write_function(write_function, folder = "Scripts") # Save out itself for later use
 
 ```
 
 <br> 
 
-## Test using saved functions
+### Test using saved functions
 
-```{r}
+```{r test function save function}
 
 rm(df_to_dense_flextable)
-source(paste0(ddir, "/df_to_dense_flextable.R"))
+source("Scripts/df_to_dense_flextable.R")
 
 mtcars %>% head() %>% df_to_dense_flextable()
 
@@ -149,7 +148,29 @@ mtcars %>% head() %>% df_to_dense_flextable()
 
 <br> 
 
-# Set up data BSA data
+## Function to load functions
+
+```{r}
+
+source_folder_r <- function(folder, verbose = FALSE) {
+
+  r_files <- list.files(folder, pattern = "\\.R$", full.names = TRUE)
+
+  if (verbose) {
+    cat("Sourcing files:\n")
+    print(basename(r_files))
+  }
+
+  invisible(lapply(r_files, source))
+}
+
+source_folder_r("Scripts", verbose = T)
+write_function(source_folder_r, folder = "Scripts") # Save out itself for later use
+
+```
+
+
+## Set up data BSA data
 
 ```{r data set up}
 
@@ -173,9 +194,9 @@ df %>%
 
 <br>
 
-## Data management {.tabset}
+### Data management {.tabset}
 
-### Clean and select subset of data
+#### Clean and select subset of data
 
 Factorise categorical data and removes labelled values from ones I will treat as numeric. 
 
@@ -196,7 +217,7 @@ df2 <- df %>% mutate(
 
 <br> 
 
-### skipmeal
+#### skipmeal
 
 ```{r}
 
@@ -211,7 +232,7 @@ df2 %>% count(skipmeal2)
 
 <br> 
 
-### MuchPov
+#### MuchPov
 
 ```{r}
 
@@ -224,7 +245,7 @@ df2 %>% count(MuchPov2)
 
 <br> 
 
-### libauth
+#### libauth
 
 ```{r}
 
@@ -242,7 +263,7 @@ var_label(df2$libauth2) <- "Libertarian-authoritarian scale"
 
 <br> 
 
-### leftrigh
+#### leftrigh
 
 ```{r}
 
@@ -261,7 +282,7 @@ var_label(df2$leftrigh2) <- "Left-right scale"
 
 <br> 
 
-### welfare2
+#### welfare2
 
 ```{r}
 
@@ -280,7 +301,7 @@ var_label(df2$welfare3) <- "Left-right scale"
 
 <br> 
 
-### WtFactor
+#### WtFactor
 
 ```{r}
 
@@ -292,17 +313,17 @@ class(df_svy)
 
 <br>
 
-## Save out BSA data
+### Save out BSA data
 
 ```{r}
 
-save(df_svy, df2, file = paste0(ddir, "/Clean BSA data.Rds"))
+save(df_svy, df2, file = "/Users/joecrowley/R/Data/BSA Teaching Data/spss/spss25/Clean BSA data.Rds")
 
 ```
 
 <br><br>
 
-# Create multicode test data
+## Create multicode test data
 
 ```{r}
 
@@ -370,6 +391,6 @@ str(survey_data)
 var_label(survey_data)
 summary(survey_data$Satisfaction)  # See smaller valid base size
 
-save(survey_data, file = paste0(ddir, "/Multicode data.Rds"))
+save(survey_data, file = "/Users/joecrowley/R/Data/BSA Teaching Data/spss/spss25/Multicode data.Rds")
 
 ```

@@ -1,0 +1,993 @@
+---
+title: "Helper functions"
+format: html
+editor: visual
+---
+
+## Set up
+
+```{r setup, include=FALSE, cache=FALSE}
+options(scipen = NULL, digits = 4) #set to two decimal 
+```
+
+<br> 
+
+### Required packages
+
+```{r packages, collapse=T}
+library(tidyverse)
+library(srvyr)
+library(flextable)
+library(haven)
+library(labelled)
+library(huxtable)
+```
+
+<br> 
+
+### Load data, set up functions
+
+```{r}
+
+# Load data
+source("Set file paths.R")
+
+# Load functions
+source("Scripts/source_folder_r.R")
+source_folder_r("Scripts", verbose = T)
+
+```
+
+<br>
+
+## Function to standardise variable names {.tabset}
+
+**Purpose**: takes the predictor variable names and labels from column names to appearing in their own columns with standardised names, e.g. `p_cat1` for the first predictor variable's categories. 
+
+### Test data 1
+
+```{r example table for standardising variable names}
+
+example_table <- 
+  df_svy %>% group_by(across(all_of(c("RAgeCat", "RSex")))) %>% 
+  summarise(leftrigh = mean(leftrigh, na.rm = T))
+
+example_table
+
+```
+
+### Test data 2
+
+```{r}
+
+example_table2 <- 
+  df2 %>% group_by(across(all_of(c("RAgeCat", "RSex")))) %>% 
+  summarise(leftrigh = mean(leftrigh, na.rm = T))
+
+example_table2
+
+```
+
+<br> 
+
+### Function
+
+```{r function to standardise var names}
+
+standardise_names <- 
+  function(
+    data, # dataframe used to create the table in question
+    out_var, # outcome variable
+    preds, # Grouping predictor variables
+    table # Table containing variables to be standardised 
+    )    {
+    
+    if(any(str_detect(class(data), "survey"))){data_to_look_in <- data[["variables"]]
+    } else {data_to_look_in <- data}
+        
+    # Create a standardised set of variable names
+    standardised_variable_names <- c(paste0("p_cat", seq_along(preds)), "o_cat")
+
+    renamed_variables <- table %>%
+          # Rename df columns with standard names
+          rename(any_of(setNames(c(preds,out_var), standardised_variable_names)))  %>% 
+          # Add outcome variable label
+          mutate(o_lab = attributes(data_to_look_in[[out_var]])$label) %>%
+          # Add column with outcome variable name
+          mutate(outcome = out_var) 
+
+        # Adding predictor meta data
+        all_renamed <- map(seq_len(length(preds)), function(number) {
+
+          # for each predictor in turn - create standardised variable names
+          standardised_predictor_names <- paste0(c("predictor", "p_lab"), number)
+
+          # Extract predictor variable labels
+          p_label <- attributes(data_to_look_in[[preds[number]]])$label
+
+          # Handle missing variable labels - not been required
+          if(is.null(p_label)){p_label <- preds[number]}
+
+          # Add predictor variable names and labels to ctab
+          ctab_plus_new_labels <- renamed_variables %>%
+            mutate(predictor = preds[number],
+                   p_lab = p_label) %>%
+            # Rename predictor variables with standardised names
+            rename(any_of(setNames(c("predictor", "p_lab"), standardised_predictor_names)))
+
+          return(ctab_plus_new_labels)
+
+           }) %>% reduce(., full_join)
+    
+    return(all_renamed)
+        
+  }
+
+write_function(standardise_names, folder = "Scripts")
+
+```
+
+<br> 
+
+### Test 1
+
+```{r}
+
+standardise_names(data = df_svy, 
+                  table = example_table, 
+                  preds = c("RAgeCat", "RSex"), 
+                  out_var = "leftrigh") %>% 
+  df_to_dense_flextable()
+
+```
+
+<br> 
+
+### Test 2
+
+```{r}
+
+standardise_names(data = df2, 
+                  table = example_table2, 
+                  preds = c("RAgeCat", "RSex"), 
+                  out_var = "leftrigh") %>% 
+  df_to_dense_flextable()
+
+```
+
+<br><br><br>
+
+## Base descriptions
+
+To work with base descriptions three functions are required:  
+
+1. `base_information` - which creates a library of base descriptions for use when creating tables.    
+
+2. `create_bases` - which uses the output of `base_information` to know what base descriptions to put with each table.  
+
+3. `prepare_base_for_table` - takes the output of `create_bases`, stored within the resulting data frame, and creates a more human-readable output when formatting the resulting tables for presentation.   
+
+<br>
+
+### Function to create base descriptions
+
+**Purpose** - creates an object you need in your environment to create tables with base sizes - it contains the variable base descriptions to use. The output is taken as an argument by functions for calculating statistics used later in the process. 
+
+**Arguments**. 
+
+* `data` - the data frame containing the variables.  
+* `general_base` - a  character vector. A general base description for use with most variables.   
+* `specific_bases` - a named character vector. Names are variable names. Content is a base description.   
+
+Where a variable has now corresponding description in `specific_bases` then `general_base` is used. 
+
+```{r base_information}
+
+base_information <- function(
+    data, 
+    general_base, 
+    specific_bases
+) {
+  
+  everything_else <- general_base
+  var_descriptions <- specific_bases
+  
+  variable_labels <- data %>% select(names(var_descriptions)) %>% var_label(unlist = T, null_action = "fill")
+  all_variable_labels <- data %>% var_label(unlist = T, null_action = "fill")
+  
+  base_descriptions <- list(everything_else, var_descriptions, variable_labels, all_variable_labels)
+  return(base_descriptions)
+  
+}
+
+write_function(base_information, folder = "Scripts")
+
+```
+
+<br> 
+
+The argument to `specific_bases` should look like this.
+
+```{r}
+
+var_descriptions <- rep("Self-completion questionnaire, asked of a random sub-set of respondents", 6)
+names(var_descriptions) <- c("leftrigh", "welfare2", "libauth", "libauth2", "leftrigh2", "welfare3") 
+var_descriptions
+
+```
+
+<br> 
+
+Here the function is applied to the BSA data. 
+
+The result is a list:  
+
+1. Character vector, general base description for all variables without a specific description.   
+2. Named character vector, with base descriptions for specific variables.   
+3. Variable labels for variables with a specific description.   
+4. Variable labels for all variables in the data frame.   
+
+```{r}
+
+example_of_base_information <- base_information(
+  data = df2,
+  general_base = "Asked of all respondents", 
+  specific_bases = var_descriptions
+)
+
+example_of_base_information
+
+```
+
+<br><br><br>
+
+### Create base info within tables
+
+**Purpose:** This is the function used within larger functions calculating statistics (mean)
+
+`create_bases` takes two arguments:  
+
+* `base_info` is the output of the `base_information()` function.  
+* `variables` is a character vector of variable names. 
+
+It exports a character vector which contains the base description for each variable name. If base descriptions are repeated, at this point they are simply duplicated in the output vector. Where there are multiple variables, their descriptions are separated by " X ".
+
+```{r create_bases}
+
+create_bases <- function(
+    base_info,
+    variables
+){
+  
+  # Extract the names of variables that have specific bases defined (from base_info[[2]])
+  names_of_variables_with_specific_bases <- base_info[[2]] %>% names
+  
+  # Logical vector: TRUE if variable has a specific base and is in 'variables', FALSE otherwise
+  bases_to_use <- names_of_variables_with_specific_bases %in% variables
+    
+  # Get the labels of the variables that match bases_to_use (from base_info[[3]])
+  variable_labels_to_use <- base_info[[3]][bases_to_use]
+  
+  # Get the specific bases that match bases_to_use (from base_info[[2]])
+  bases_to_use <- base_info[[2]][bases_to_use] 
+  
+  # If there are any variables with specific bases...
+  if(length(bases_to_use) > 0){
+    # Create base strings in the form "<base>:-  <label>"
+    list_of_bases <- paste0(bases_to_use, ":-  ", variable_labels_to_use)
+  } else {
+    # If no specific bases apply, start with an empty vector
+    list_of_bases <- c()
+  }
+    
+  # Find variables in 'variables' that do NOT have specific bases
+  variables_using_default_description <- variables[!variables %in% names_of_variables_with_specific_bases]
+  
+  # If there are any variables without specific bases...
+  if(length(variables_using_default_description) > 0){
+    # Get their labels (from base_info[[4]])
+    labels_of_variables_using_default_description <- base_info[[4]][variables_using_default_description]
+    
+    # Create default base strings in the form "<general_base>:-  <label>"
+    default_base_description <- paste0(base_info[[1]],  ":-  ", labels_of_variables_using_default_description)
+    
+    # Append the default descriptions to the list_of_bases
+    list_of_bases <- c(list_of_bases, default_base_description)
+    } 
+  
+  # Collapse all base strings into one single string separated by " X "
+  list_of_bases <- list_of_bases %>% paste0(., collapse = " X ")
+  
+  return(list_of_bases) # Return the final string
+
+}
+
+write_function(create_bases, folder = "Scripts")
+
+```
+
+<br>
+
+These examples of applying `create_bases` show different resulting combinations of base descriptions. 
+
+```{r}
+
+create_bases(example_of_base_information, c("libauth","leftrigh", "RSex"))
+create_bases(example_of_base_information, "RSex")
+create_bases(example_of_base_information, "skipmeal2")
+create_bases(example_of_base_information, c("libauth","skipmeal2","RAgeCat","RSex"))
+
+```
+
+<br>
+
+#### Prepare base for table
+
+The left hand side of each base description states the population it applies to, the right hand side which variable it relates to.
+
+First split these in two, and see if the left hand side resolves into a single unique value. 
+
+```{r prepare_base_for_table}
+
+base_test1 <- create_bases(example_of_base_information, c("libauth","leftrigh", "RSex"))
+base_test2 <- create_bases(example_of_base_information, c("libauth","leftrigh"))
+base_test3 <- create_bases(example_of_base_information, c("libauth","leftrigh","welfare2"))
+base_test4 <- create_bases(example_of_base_information, c("libauth","leftrigh", "welfare2", "RSex", "RAgeCat"))
+
+```
+
+<br>
+
+### Create formatted bases for display under a table
+
+**Purpose**: This takes the long string of base descriptions returned by `create_bases` and makes into a human-readable piece of text. 
+
+*Why not do this all in one go, as part of `create_bases`?* Because, this returns a description for all variables in a table, and sometimes, the output of `calc_stats`, the function `create_bases` is used within, is later broken up into sub-tables. This stage happens after that, once the final variables to be shown in a table is known.  
+
+**Arguments**: it has only one argument, `bases_for_table`, which should be the character vector returned by `create_bases`. 
+
+**Outputs**: the outputs come as a list, each element corresponding to a different base description. 
+
+```{r}
+
+prepare_base_for_table <- function(bases_for_table) {
+  
+  base_results <- list()  # Empty list to store results
+
+  # Split the input string by " X " into separate base elements, then keep only unique elements
+  bases <- bases_for_table %>% str_split_1(., " X ") %>% unique
+  
+  # From each base element, extract the part before ":-  " as base description
+  base_descriptions <- bases %>% str_split_i(., ":-  ", 1)
+  
+  # From each base element, extract the part after ":-  " as variable label(s)
+  variables <- bases %>% str_split_i(., ":-  ", 2)
+  
+  # Find all unique base descriptions
+  unique_base_descriptions <- unique(base_descriptions)
+  
+  # If there is only one unique base description...
+  if(length(unique_base_descriptions) == 1){
+    # Append that unique base description to the results list
+    base_results <- append(base_results ,list(unique_base_descriptions))
+    } else {
+       
+  # Create a data frame of `base_descriptions` and count the occurrences of each
+  most_common_base_description <- data.frame(base_descriptions = base_descriptions) %>% 
+    count(base_descriptions) %>%   # Count frequency of each base description
+    mutate(max_n = max(n)) %>%     # Add a column with max count value
+    filter(n == max_n) %>%         # Filter to base description(s) with max count
+    pull(base_descriptions) %>%    # Extract the base description(s)
+    unique                         # Remove duplicates if any
+  
+  # If there are multiple most common base descriptions, keep only the first one
+  if(length(most_common_base_description) > 1){
+    most_common_base_description <- most_common_base_description[1]
+    }
+  
+  # Format the most common base description prepended by "All other variables:- " 
+  base_results[[1]] <- most_common_base_description %>% 
+    paste("All other variables:- ", ., collapse = "") %>% 
+    str_to_sentence() # and capitalize sentence
+  
+  # Remove the most common base description from the unique list to handle separately
+  unique_base_descriptions <- unique_base_descriptions[!unique_base_descriptions %in% most_common_base_description]
+  
+  # Loop over remaining unique base descriptions
+  for (xxx in unique_base_descriptions){
+    
+    # Find indices where the base description matches the current unique description
+    index <- which(base_descriptions %in% xxx) 
+    
+    # Concatenate the variables associated with this base description into a comma-separated string
+    # `index` identifies the relevant variable labels from `variables`
+    variable_list <- paste0(variables[index], collapse = ", ") 
+    
+    # Create a string combining the base description and its variables
+    variable_description <- paste0(xxx, ":- ", variable_list) 
+    
+    # Append this description to the results list
+    base_results <- append(base_results, variable_description)
+    
+  }
+  
+  }
+
+    # Most common last. 
+    base_results <- rev(base_results)
+    
+  # Return the list of prepared base descriptions
+    return(base_results)
+
+}
+
+write_function(prepare_base_for_table, folder = "Scripts")
+
+```
+
+<br>
+
+Example applications of `prepare_base_for_table`. 
+
+```{r}
+
+prepare_base_for_table(base_test1)
+prepare_base_for_table(base_test2)
+prepare_base_for_table(base_test3)
+prepare_base_for_table(base_test4)
+
+```
+
+<br><br><br>
+
+## Support functions for unweighted_median
+
+<br> 
+
+### A function for grouped median SE
+
+**Purpose**: this function will be used with `unweighted_median` to calculate an unweighted standard error of a median *within* groups. 
+
+Variables to use for testing...
+
+```{r}
+
+df2 %>% names
+df2 %>% count(RSex, RAgeCat) %>% df_to_dense_flextable()
+
+```
+
+<br> 
+
+**Arguments:**   
+
+* `data` - data frame in use by `unweighted_median`,   
+* `outcome` - character vector length 1,    
+* `predictors` - character vector of predictors.    
+
+
+```{r}
+
+grouped_medianse <- function(data, outcome, predictors){
+  
+  # Select only the predictor columns from the data
+  data_with_required_predictors <- data %>% select(all_of(predictors)) 
+  
+  # For each predictor column, pull the factor vector from the data and drop unused levels
+  predictors_as_list <- map(
+    names(data_with_required_predictors), 
+    ~data %>% pull(.x) %>% fct_drop
+  )
+  
+  # Split the original data into subsets based on combinations of predictor factor levels
+  split_data <- split(data, predictors_as_list, drop = TRUE)
+  
+  # For each subset of data, calculate the median standard error and create a results row
+  results <- map(1:length(split_data), function(number) {
+    
+    # Extract the outcome variable values for the current subset
+    outcome_data <- split_data[[number]] %>% pull(outcome)
+    
+    # Calculate the median standard error using the wrappedtools package
+    median <- wrappedtools::medianse(outcome_data)
+    
+    # Extract the unique combination of predictor levels for this subset
+    levels_in_use <- split_data[[number]] %>% 
+      select(all_of(predictors)) %>% 
+      unique() %>% 
+      # Add a new column with the median standard error estimate
+      mutate(estimate_se = median)
+    
+  }) %>% 
+    
+    bind_rows() # Combine all results into a single data frame
+  
+  return(results) # Return the combined data frame with predictor levels and median SE estimates
+  
+}
+
+write_function(grouped_medianse, folder = "Scripts")
+
+```
+
+<br> 
+
+Examples of application, the output is a dataframe with the estimated standard error with the desired naming convention `estimate_se` which matches that used elsewhere for calculating SE. 
+
+```{r}
+
+grouped_medianse(data = df2, predictors = c("RAgeCat", "RSex"), outcome = "libauth") %>% df_to_dense_flextable()
+
+```
+
+<br> 
+
+For comparison: results from underlying function `wrappedtools::medianse`. 
+
+```{r}
+
+wrappedtools::medianse(df2 %>% filter(RAgeCat=="18-24" & RSex == "Male") %>% pull(libauth))
+wrappedtools::medianse(df2 %>% filter(RAgeCat=="DK/Refused/Not answered" & RSex == "Male") %>% pull(libauth))
+
+```
+
+<br><br><br>
+
+### A function for grouped median CI
+
+**Purpose**: this function willb used with `unweighted_median` to calculate an unweighted confidence interval around a median *within* groups. 
+
+**Arguments:**   
+
+* `data` - data frame in use by `unweighted_median`,   
+* `outcome` - character vector length 1,    
+* `predictors` - character vector of predictors.    
+
+
+```{r}
+
+grouped_medianci <- function(data, outcome, predictors){
+  
+  # Select only the predictor columns from the data
+  data_with_required_predictors <- data %>% select(all_of(predictors)) 
+  
+  # For each predictor column, extract its factor values from data and drop unused levels
+  predictors_as_list <- map(
+    names(data_with_required_predictors), 
+    ~data %>% pull(.x) %>% fct_drop
+  )
+  
+  # Split the original data frame into subsets based on the combination of factor levels in predictors_as_list
+  split_data <- split(data, predictors_as_list, drop = TRUE)
+  
+  # For each subset in split_data...
+  results <- map(1:length(split_data), function(number) {
+    
+    # Pull the outcome variable values for this subset
+    outcome_data <- split_data[[number]] %>% pull(outcome)
+    
+    # Proceed only if there are more than 5 observations in the subset
+    if(length(outcome_data) > 5){
+      
+      # Calculate median confidence interval with bootstrap (from wrappedtools package)
+      cil <- wrappedtools::median_cl_boot(outcome_data)
+      
+      # Extract the unique combination of predictor levels for this subset
+      levels_in_use <- split_data[[number]] %>% 
+        select(all_of(predictors)) %>% 
+        unique() %>% 
+        # Add the lower and upper confidence interval bounds as new columns
+        mutate(estimate_low = cil$CIlow, estimate_upp = cil$CIhigh)
+      
+      # Return this data frame with predictor levels and confidence intervals
+      return(levels_in_use) 
+    }
+  }) %>% 
+    # Combine the list of data frames into one data frame
+    bind_rows()
+  
+  # Return the combined results
+  return(results)
+  
+}
+
+write_function(grouped_medianci, folder = "Scripts")
+
+```
+
+<br>
+
+**Examples of use:**-
+
+Again, the output is a dataframe with the estimated CI using the naming convention `unweighted_median` expects, which matches that used elsewhere for calculating CI. 
+
+```{r}
+
+grouped_medianci(data = df2, predictors = c("RAgeCat", "RSex"), outcome = "libauth") %>% df_to_dense_flextable()
+grouped_medianci(data = df2, predictors = c("RSex" , "MuchPov2"), outcome = "libauth") %>% df_to_dense_flextable()
+grouped_medianci(data = df2, predictors = c("RSex" , "MuchPov"), outcome = "welfare2") %>% df_to_dense_flextable()
+grouped_medianci(data = df2, predictors = c("skipmeal2","MuchPov2","RSex"), outcome = "welfare2") %>% df_to_dense_flextable()
+
+```
+
+<br><br><br>
+
+## Significance testing 
+
+Data filtered on both outcome and predictor variables.   
+Predictor already a factor. Outcome either already numeric or a factor. 
+
+**unweighted_test_numeric_by_cat**:  
+* "mean"   
+* "median"    
+* "sum"  
+
+**unweighted_test_cat_by_cat**:  
+* "perc"    
+* "count"  
+
+**weighted_test_numeric_by_cat**:   
+* "w_mean"   
+* "w_median"   
+* "w_sum"   
+
+**weighted_test_cat_by_cat**:  
+* "w_perc"  
+* "w_count"    
+
+### Numeric variables, unweighted
+
+```{r}
+
+# df2
+# data <- df3
+# outcome <- "skipmeal2"
+# predictor <- "RSex"
+
+unweighted_test_numeric_by_cat <- function(data, outcome, predictor) {
+  
+  x <- data %>% pull(predictor)
+  y <- data %>% pull(outcome)
+  
+  x_lab <- data %>% select(all_of(predictor)) %>% var_label(unlist = TRUE, null_action = "fill")
+  y_lab <- data %>% select(all_of(outcome)) %>% var_label(unlist = TRUE, null_action = "fill")
+
+  # Remove missing values
+  complete_idx <- complete.cases(y, x)
+  y <- y[complete_idx]
+  x <- x[complete_idx]
+  
+  result <- tryCatch({
+    # Check normality of residuals (Shapiro-Wilk)
+    model <- lm(y ~ x)
+    shapiro_p <- shapiro.test(residuals(model))$p.value
+    
+    # Decision
+    if (shapiro_p < 0.05) {
+      # Non-normal → Kruskal–Wallis
+      method_used <- "Kruskal–Wallis"
+      p_val <- kruskal.test(y ~ x)$p.value
+    } else {
+      # Normal enough → Welch's ANOVA
+      method_used <- "Welch's ANOVA"
+      p_val <- oneway.test(y ~ x, var.equal = FALSE)$p.value
+    }
+    
+    list(method = method_used, p = p_val)
+    
+  }, error = function(e) {
+    list(method = "Significance test returned an error.", p = NA)
+  })
+  
+  result <- tibble(
+    cross_break = predictor,
+    predictor1 = predictor, 
+    p_lab1 = x_lab, 
+    outcome = outcome, 
+    o_lab = y_lab,
+    p_method = result$method,
+    p_value = result$p
+  )
+  
+  result <- map_df(c("mean", "median", "sum"), ~result %>% mutate(stat = .x))  
+  
+  return(result)
+  
+}
+
+unweighted_test_numeric_by_cat(df2, "libauth", "skipmeal2") %>% glimpse
+unweighted_test_numeric_by_cat(df2, "leftrigh", "skipmeal2")
+unweighted_test_numeric_by_cat(df2, "welfare2", "skipmeal2")
+
+unweighted_test_numeric_by_cat(df2, "libauth", "RSex")
+unweighted_test_numeric_by_cat(df2, "leftrigh", "RSex")
+unweighted_test_numeric_by_cat(df2, "welfare2", "RSex")
+
+df3 <- df2 %>% mutate(RSex = fct_recode(RSex, NULL = "Male"))
+df3  %>% count(RSex)
+
+unweighted_test_numeric_by_cat(df3, "welfare2", "RSex")
+
+write_function(unweighted_test_numeric_by_cat, folder = "Scripts")
+
+
+```
+
+<br> 
+
+### Numeric variables, weighted
+
+```{r}
+
+# data <- df_svy
+# outcome <- "welfare2"
+# predictor <- "RSex"
+
+weighted_test_numeric_by_cat <- function(data, outcome, predictor) {
+  
+  suppressMessages({
+  
+  x_lab <- data[["variables"]] %>% select(all_of(predictor)) %>% var_label(unlist = TRUE, null_action = "fill")
+  y_lab <- data[["variables"]] %>% select(all_of(outcome)) %>% var_label(unlist = TRUE, null_action = "fill")
+
+  # Remove missing values
+  filtered_data <- data %>% filter(if_all(c(outcome, predictor), ~!is.na(.x)))
+  frmla <- paste0(outcome, " ~ ", predictor)
+  
+  result <- tryCatch({
+    # Check normality of residuals (Shapiro-Wilk)
+    model <- survey::svyglm(frmla, design = filtered_data)
+    shapiro_p <- shapiro.test(residuals(model))$p.value
+    
+    # Decision
+    if (shapiro_p < 0.05) {
+      # Non-normal → Kruskal–Wallis
+      method_used <- "Kruskal–Wallis"
+      p_val <- survey::svyranktest(frmla, design = filtered_data)$p.value
+    } else {
+      # Normal enough → Welch's ANOVA
+      method_used <- "Wald Test"
+      anova_result <- survey::regTermTest(model, predictor)
+      p_val <- anova_result[["p"]] %>% as.vector()
+    }
+    
+    list(method = method_used, p = p_val)
+    
+  }, error = function(e) {
+    list(method = "Significance test returned an error.", p = NA)
+  })
+  
+  result <- tibble(
+      cross_break = predictor,
+      predictor1 = predictor, 
+      p_lab1 = x_lab, 
+      outcome = outcome, 
+      o_lab = y_lab,
+      p_method = result$method,
+      p_value = result$p
+    )
+  
+  result <- map_df(c("w_mean", "w_median", "w_sum"), ~result %>% mutate(stat = .x))  
+  
+  return(result)
+  
+  })
+}
+
+write_function(weighted_test_numeric_by_cat, folder = "Scripts")
+
+
+weighted_test_numeric_by_cat(df_svy, outcome = "welfare2", predictor = "RSex")
+weighted_test_numeric_by_cat(data = df_svy, outcome = "libauth", predictor = "RAgeCat")
+
+
+```
+
+<br> 
+
+### Categorical variables, unweighted
+
+```{r}
+
+unweighted_test_cat_by_cat <- function(data, outcome, predictor) {
+  
+  x <- data %>% pull(predictor)
+  y <- data %>% pull(outcome)
+  
+  x_lab <- data %>% select(all_of(predictor)) %>% var_label(unlist = TRUE, null_action = "fill")
+  y_lab <- data %>% select(all_of(outcome)) %>% var_label(unlist = TRUE, null_action = "fill")
+
+  # Remove missing values
+  complete_idx <- complete.cases(y, x)
+  y <- y[complete_idx]
+  x <- x[complete_idx]
+  
+  result <- tryCatch({
+
+      # chi-square test
+      method_used <- "Chi-Square test"
+      p_val <- chisq.test(x, y)$p.value
+    
+    list(method = method_used, p = p_val)
+    
+  }, error = function(e) {
+    list(method = "Significance test returned an error.", p = NA)
+  })
+  
+  result <- tibble(
+      cross_break = predictor,
+      predictor1 = predictor, 
+      p_lab1 = x_lab, 
+      outcome = outcome, 
+      o_lab = y_lab,
+      p_method = result$method,
+      p_value = result$p
+     )
+
+  result <- map_df(c("perc", "count"), ~result %>% mutate(stat = .x))  
+  
+  return(result)
+
+}
+
+write_function(unweighted_test_cat_by_cat, folder = "Scripts")
+
+
+unweighted_test_cat_by_cat(data = df2, outcome = "skipmeal2", predictor = "RSex")
+df2 %>% count(RSex, skipmeal2) %>% group_by(RSex) %>% mutate(n = (n /sum(n)) * 100) %>% 
+  pivot_wider(names_from = RSex, values_from = n)
+
+unweighted_test_cat_by_cat(data = df2, outcome = "MuchPov", predictor = "RAgeCat") %>% glimpse
+df2 %>% count(RAgeCat, MuchPov) %>% group_by(RAgeCat) %>% mutate(n = (n /sum(n)) * 100) %>% 
+  pivot_wider(names_from = RAgeCat, values_from = n)
+
+```
+
+<br> 
+
+### Categorical variables, weighted
+
+```{r}
+
+weighted_test_cat_by_cat <- function(data, outcome, predictor) {
+  
+  x_lab <- data[["variables"]] %>% select(all_of(predictor)) %>% var_label(unlist = TRUE, null_action = "fill")
+  y_lab <- data[["variables"]] %>% select(all_of(outcome)) %>% var_label(unlist = TRUE, null_action = "fill")
+
+  # Remove missing values
+  filtered_data <- data %>% filter(if_all(c(outcome, predictor), ~!is.na(.x)))
+  frmla <- formula(paste0("~",outcome,  " + " , predictor))
+  
+  result <- tryCatch({
+    
+      # chi-square test
+      method_used <- "Chi-Square test"
+      p_val <- svychisq(frmla, design = filtered_data, statistic = "adjWald")$p.value
+      p_val <- p_val %>% as.vector()
+      
+    list(method = method_used, p = p_val)
+    
+  }, error = function(e) {
+    list(method = "Significance test returned an error.", p = NA)
+  })
+  
+  result <- tibble(
+    cross_break = predictor,
+    predictor1 = predictor, 
+    p_lab1 = x_lab, 
+    outcome = outcome, 
+    o_lab = y_lab,
+    p_method = result$method,
+    p_value = result$p
+  )
+
+  result <- map_df(c("w_perc", "w_count"), ~result %>% mutate(stat = .x))  
+  
+  return(result)
+  
+}
+
+write_function(weighted_test_cat_by_cat, folder = "Scripts")
+
+
+weighted_test_cat_by_cat(df_svy, outcome = "welfare3", predictor = "RSex") %>% glimpse()
+weighted_test_cat_by_cat(df_svy, outcome = "MuchPov", predictor = "RAgeCat") %>% glimpse()
+
+```
+
+## p.values wrapper
+
+```{r}
+
+return_pvalues <- function(data, outcome, predictor){
+
+    if(any(str_detect(class(data), "survey"))){
+      data_2 <- data[["variables"]]
+      weights <- "weights"
+    } else {
+        data_2 <- data
+        weights <- "no weights"
+    }
+  
+  outcome_class_factor <- class(data_2 %>% pull(outcome)) %>% str_detect(., "factor") %>% any()
+  
+  if(weights == "no weights"){
+    
+    if(outcome_class_factor == TRUE){
+      result <- unweighted_test_cat_by_cat(data = data, outcome = outcome, predictor = predictor)
+    } else { 
+      result <- unweighted_test_numeric_by_cat(data = data, outcome = outcome, predictor = predictor)
+    }
+    
+  } else {
+    
+    if(outcome_class_factor == TRUE){
+      result <- weighted_test_cat_by_cat(data = data, outcome = outcome, predictor = predictor) 
+    } else { 
+      result <- weighted_test_numeric_by_cat(data = data, outcome = outcome, predictor = predictor)
+    }
+    
+  }
+  
+  return(result)
+
+}
+
+write_function(return_pvalues, folder = "Scripts")
+
+
+return_pvalues(data = df_svy, outcome = "libauth", predictor = "RAgeCat")
+return_pvalues(data = df_svy, outcome = "MuchPov2", predictor = "RAgeCat")
+return_pvalues(data = df2, outcome = "MuchPov2", predictor = "RAgeCat")
+return_pvalues(data = df2, outcome = "RAgeCat", predictor = "skipmeal")
+return_pvalues(data = df_svy, outcome = "RAgeCat", predictor = "skipmeal")
+
+```
+
+### Map p.values wrapper
+
+```{r}
+
+outcomes <- c("libauth", "RSex", "RAgeCat")
+predictors <- c("MuchPov2", "welfare3")
+
+map_return_p_values <- function(outcomes, predictors, data){
+  map_df(predictors, function(pred){
+    map_df(outcomes, function(out){
+      return_pvalues(data = data, outcome = out, predictor = pred)
+    })
+  })
+}
+
+
+write_function(map_return_p_values, folder = "Scripts")
+
+
+map_return_p_values(data = df2, outcomes  = "libauth", predictors = "skipmeal2")
+map_return_p_values(data = df2, outcomes = "libauth", predictors = c("skipmeal2", "MuchPov2", "RAgeCat"))
+map_return_p_values(data = df_svy, outcomes = "libauth", predictors = c("skipmeal2", "MuchPov2", "RAgeCat"))
+
+
+
+map_return_p_values(data = df2, outcomes = "RSex", predictors = c("skipmeal2", "MuchPov2", "RAgeCat"))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
