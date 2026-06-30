@@ -13,6 +13,7 @@ library(tidyverse)
 library(srvyr)
 library(flextable)
 library(haven)
+library(here)
 library(labelled)
 library(huxtable)
 ```
@@ -24,7 +25,7 @@ library(huxtable)
 ```{r}
 
 ## Load data
-source("Set file paths.R")
+df2 <- readRDS(here::here("data", "synthetic_bsa_clean.rds"))
 
 ## Load functions
 source("Scripts/source_folder_r.R")
@@ -566,7 +567,7 @@ write_function(unweighted_sum, folder = "Scripts")
 
 ```{r}
 
-unweighted_sum(df2, outcomes = c("libauth","leftrigh"), predictors = list("RSex","RAgeCat")) %>% print(n=100) %>% print()
+unweighted_sum(df2, outcomes = c("libauth","leftrigh"), predictors = list("RSex","RAgeCat")) 
 
 ```
 

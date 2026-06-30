@@ -13,6 +13,7 @@ library(tidyverse)
 library(srvyr)
 library(flextable)
 library(haven)
+library(here)
 library(labelled)
 library(huxtable)
 ```
@@ -24,7 +25,8 @@ library(huxtable)
 ```{r}
 
 ## Load data
-source("Set file paths.R")
+df2    <- readRDS(here::here("data", "synthetic_bsa_clean.rds"))
+df_svy <- df2 %>% srvyr::as_survey_design(weight = WtFactor)
 
 ## Load functions
 source("Scripts/source_folder_r.R")

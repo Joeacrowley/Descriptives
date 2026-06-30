@@ -214,6 +214,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
       </ul>
   </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Applied examples</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./Percentage - crosstabulation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Percentages crosstab</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
     </ul>
     </div>
 </nav>
@@ -309,31 +326,40 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(srvyr)</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(flextable)</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(haven)</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(labelled)</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(huxtable)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(here)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(labelled)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(huxtable)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p><br></p>
 <section id="load-data-set-up-functions" class="level3" data-number="6.1.1">
 <h3 data-number="6.1.1" class="anchored" data-anchor-id="load-data-set-up-functions"><span class="header-section-number">6.1.1</span> Load data, set up functions</h3>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="do">## Load data</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"Set file paths.R"</span>)</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="do">## Load functions</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"Scripts/source_folder_r.R"</span>)</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">source_folder_r</span>(<span class="st">"Scripts"</span>, <span class="at">verbose =</span> T)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>df2    <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(here<span class="sc">::</span><span class="fu">here</span>(<span class="st">"data"</span>, <span class="st">"synthetic_bsa_clean.rds"</span>))</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>df_svy <span class="ot">&lt;-</span> df2 <span class="sc">%&gt;%</span> srvyr<span class="sc">::</span><span class="fu">as_survey_design</span>(<span class="at">weight =</span> WtFactor)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="do">## Load functions</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"Scripts/source_folder_r.R"</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">source_folder_r</span>(<span class="st">"Scripts"</span>, <span class="at">verbose =</span> T)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Sourcing files:
- [1] "base_information.R"               "create_bases.R"                  
- [3] "df_to_dense_flextable.R"          "grouped_medianci.R"              
- [5] "grouped_medianse.R"               "map_return_p_values.R"           
- [7] "prepare_base_for_table.R"         "return_pvalues.R"                
- [9] "source_folder_r.R"                "standardise_names.R"             
-[11] "unweighted_count.R"               "unweighted_mean.R"               
-[13] "unweighted_median.R"              "unweighted_perc.R"               
-[15] "unweighted_sum.R"                 "unweighted_test_cat_by_cat.R"    
-[17] "unweighted_test_numeric_by_cat.R" "weighted_test_cat_by_cat.R"      
-[19] "weighted_test_numeric_by_cat.R"   "write_function.R"                </code></pre>
+ [1] "base_information.R"               "calc_stats.R"                    
+ [3] "check_all_factors.R"              "common_prefix.R"                 
+ [5] "convert_multicodes.R"             "create_bases.R"                  
+ [7] "df_to_dense_flextable.R"          "grouped_medianci.R"              
+ [9] "grouped_medianse.R"               "list_depth.R"                    
+[11] "manage_predictors.R"              "map_return_p_values.R"           
+[13] "outcomes_not_in_predictors.R"     "prepare_base_for_table.R"        
+[15] "return_pvalues.R"                 "source_folder_r.R"               
+[17] "standardise_names.R"              "unweighted_count.R"              
+[19] "unweighted_mean.R"                "unweighted_median.R"             
+[21] "unweighted_perc.R"                "unweighted_sum.R"                
+[23] "unweighted_test_cat_by_cat.R"     "unweighted_test_numeric_by_cat.R"
+[25] "vars_exist.R"                     "weighted_count.R"                
+[27] "weighted_mean.R"                  "weighted_median.R"               
+[29] "weighted_perc.R"                  "weighted_sum.R"                  
+[31] "weighted_test_cat_by_cat.R"       "weighted_test_numeric_by_cat.R"  
+[33] "write_function.R"                </code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>data_table_presets <span class="ot">&lt;-</span> <span class="cf">function</span>(data){</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>      DT<span class="sc">::</span><span class="fu">datatable</span>(</span>
@@ -508,11 +534,11 @@ $ outcome          &lt;chr&gt; "libauth", "libauth", "libauth", "leftrigh", "lef
 $ o_lab            &lt;chr&gt; "Libertarian-authoritarian scale (TradVals to censor)…
 $ o_cat            &lt;chr&gt; "w_mean", "w_mean", "w_mean", "w_mean", "w_mean", "w_…
 $ stat             &lt;chr&gt; "w_mean", "w_mean", "w_mean", "w_mean", "w_mean", "w_…
-$ estimate         &lt;dbl&gt; 3.489887, 3.487555, 3.492124, 2.543509, 2.507620, 2.5…
+$ estimate         &lt;dbl&gt; 3.487181, 3.502264, 3.472249, 2.564134, 2.523313, 2.6…
 $ estimate_se      &lt;chr&gt; "-", "-", "-", "-", "-", "-"
-$ base             &lt;int&gt; 2587, 1171, 1416, 2579, 1167, 1412
+$ base             &lt;int&gt; 2602, 1217, 1385, 2594, 1212, 1382
 $ base_description &lt;lgl&gt; NA, NA, NA, NA, NA, NA
-$ unweighted_n     &lt;int&gt; 2587, 1171, 1416, 2579, 1167, 1412</code></pre>
+$ unweighted_n     &lt;int&gt; 2602, 1217, 1385, 2594, 1212, 1382</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>trial1 <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
@@ -520,11 +546,11 @@ $ unweighted_n     &lt;int&gt; 2587, 1171, 1416, 2579, 1167, 1412</code></pre>
   cross_break predictor1 p_lab1        p_cat1 outcome o_lab o_cat stat  estimate
   &lt;chr&gt;       &lt;chr&gt;      &lt;chr&gt;         &lt;chr&gt;  &lt;chr&gt;   &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;    &lt;dbl&gt;
 1 Total       Total      Total         Total  libauth Libe… w_me… w_me…     3.49
-2 RSex        RSex       Sex of respo… Male   libauth Libe… w_me… w_me…     3.49
-3 RSex        RSex       Sex of respo… Female libauth Libe… w_me… w_me…     3.49
-4 Total       Total      Total         Total  leftri… Left… w_me… w_me…     2.54
-5 RSex        RSex       Sex of respo… Male   leftri… Left… w_me… w_me…     2.51
-6 RSex        RSex       Sex of respo… Female leftri… Left… w_me… w_me…     2.58
+2 RSex        RSex       Sex of respo… Male   libauth Libe… w_me… w_me…     3.50
+3 RSex        RSex       Sex of respo… Female libauth Libe… w_me… w_me…     3.47
+4 Total       Total      Total         Total  leftri… Left… w_me… w_me…     2.56
+5 RSex        RSex       Sex of respo… Male   leftri… Left… w_me… w_me…     2.52
+6 RSex        RSex       Sex of respo… Female leftri… Left… w_me… w_me…     2.60
 # ℹ 4 more variables: estimate_se &lt;chr&gt;, base &lt;int&gt;, base_description &lt;lgl&gt;,
 #   unweighted_n &lt;int&gt;</code></pre>
 </div>
@@ -534,11 +560,11 @@ $ unweighted_n     &lt;int&gt; 2587, 1171, 1416, 2579, 1167, 1412</code></pre>
   cross_break predictor1 p_lab1        p_cat1 outcome o_lab o_cat stat  estimate
   &lt;chr&gt;       &lt;chr&gt;      &lt;chr&gt;         &lt;chr&gt;  &lt;chr&gt;   &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;    &lt;dbl&gt;
 1 Total       Total      Total         Total  libauth Libe… w_me… w_me…     3.49
-2 RSex        RSex       Sex of respo… Male   libauth Libe… w_me… w_me…     3.49
-3 RSex        RSex       Sex of respo… Female libauth Libe… w_me… w_me…     3.49
-4 Total       Total      Total         Total  leftri… Left… w_me… w_me…     2.54
-5 RSex        RSex       Sex of respo… Male   leftri… Left… w_me… w_me…     2.51
-6 RSex        RSex       Sex of respo… Female leftri… Left… w_me… w_me…     2.58
+2 RSex        RSex       Sex of respo… Male   libauth Libe… w_me… w_me…     3.50
+3 RSex        RSex       Sex of respo… Female libauth Libe… w_me… w_me…     3.47
+4 Total       Total      Total         Total  leftri… Left… w_me… w_me…     2.56
+5 RSex        RSex       Sex of respo… Male   leftri… Left… w_me… w_me…     2.52
+6 RSex        RSex       Sex of respo… Female leftri… Left… w_me… w_me…     2.60
 # ℹ 4 more variables: estimate_se &lt;chr&gt;, base &lt;int&gt;, base_description &lt;lgl&gt;,
 #   unweighted_n &lt;int&gt;</code></pre>
 </div>
@@ -561,11 +587,11 @@ $ outcome          &lt;chr&gt; "libauth", "libauth", "libauth", "libauth", "liba
 $ o_lab            &lt;chr&gt; "Libertarian-authoritarian scale (TradVals to censor)…
 $ o_cat            &lt;chr&gt; "w_mean", "w_mean", "w_mean", "w_mean", "w_mean", "w_…
 $ stat             &lt;chr&gt; "w_mean", "w_mean", "w_mean", "w_mean", "w_mean", "w_…
-$ estimate         &lt;dbl&gt; 3.489887, 3.487555, 3.492124, 3.286334, 3.265549, 3.4…
-$ estimate_se      &lt;dbl&gt; 0.01720957, 0.02717268, 0.02138219, 0.07059815, 0.050…
-$ base             &lt;int&gt; 2587, 1171, 1416, 163, 332, 416, 423, 204, 234, 812, …
+$ estimate         &lt;dbl&gt; 3.487181, 3.502264, 3.472249, 3.379764, 3.256651, 3.4…
+$ estimate_se      &lt;dbl&gt; 0.01634180, 0.02403121, 0.02215668, 0.06716638, 0.044…
+$ base             &lt;int&gt; 2602, 1217, 1385, 159, 337, 420, 420, 219, 243, 793, …
 $ base_description &lt;lgl&gt; NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-$ unweighted_n     &lt;int&gt; 2587, 1171, 1416, 163, 332, 416, 423, 204, 234, 812, …</code></pre>
+$ unweighted_n     &lt;int&gt; 2602, 1217, 1385, 159, 337, 420, 420, 219, 243, 793, …</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>trial2 <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
@@ -573,15 +599,15 @@ $ unweighted_n     &lt;int&gt; 2587, 1171, 1416, 163, 332, 416, 423, 204, 234, 8
    cross_break predictor1 p_lab1       p_cat1 outcome o_lab o_cat stat  estimate
    &lt;chr&gt;       &lt;chr&gt;      &lt;chr&gt;        &lt;chr&gt;  &lt;chr&gt;   &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;    &lt;dbl&gt;
  1 Total       Total      Total        Total  libauth Libe… w_me… w_me…     3.49
- 2 RSex        RSex       Sex of resp… Male   libauth Libe… w_me… w_me…     3.49
- 3 RSex        RSex       Sex of resp… Female libauth Libe… w_me… w_me…     3.49
- 4 RAgeCat     RAgeCat    Age of resp… 18-24  libauth Libe… w_me… w_me…     3.29
- 5 RAgeCat     RAgeCat    Age of resp… 25-34  libauth Libe… w_me… w_me…     3.27
- 6 RAgeCat     RAgeCat    Age of resp… 35-44  libauth Libe… w_me… w_me…     3.45
- 7 RAgeCat     RAgeCat    Age of resp… 45-54  libauth Libe… w_me… w_me…     3.49
+ 2 RSex        RSex       Sex of resp… Male   libauth Libe… w_me… w_me…     3.50
+ 3 RSex        RSex       Sex of resp… Female libauth Libe… w_me… w_me…     3.47
+ 4 RAgeCat     RAgeCat    Age of resp… 18-24  libauth Libe… w_me… w_me…     3.38
+ 5 RAgeCat     RAgeCat    Age of resp… 25-34  libauth Libe… w_me… w_me…     3.26
+ 6 RAgeCat     RAgeCat    Age of resp… 35-44  libauth Libe… w_me… w_me…     3.43
+ 7 RAgeCat     RAgeCat    Age of resp… 45-54  libauth Libe… w_me… w_me…     3.50
  8 RAgeCat     RAgeCat    Age of resp… 55-59  libauth Libe… w_me… w_me…     3.57
- 9 RAgeCat     RAgeCat    Age of resp… 60-64  libauth Libe… w_me… w_me…     3.53
-10 RAgeCat     RAgeCat    Age of resp… 65+    libauth Libe… w_me… w_me…     3.74
+ 9 RAgeCat     RAgeCat    Age of resp… 60-64  libauth Libe… w_me… w_me…     3.44
+10 RAgeCat     RAgeCat    Age of resp… 65+    libauth Libe… w_me… w_me…     3.71
 # ℹ 12 more rows
 # ℹ 4 more variables: estimate_se &lt;dbl&gt;, base &lt;int&gt;, base_description &lt;lgl&gt;,
 #   unweighted_n &lt;int&gt;</code></pre>
@@ -608,11 +634,11 @@ $ outcome          &lt;chr&gt; "libauth", "libauth", "libauth", "libauth", "liba
 $ o_lab            &lt;chr&gt; "Libertarian-authoritarian scale (TradVals to censor)…
 $ o_cat            &lt;chr&gt; "w_mean", "w_mean", "w_mean", "w_mean", "w_mean", "w_…
 $ stat             &lt;chr&gt; "w_mean", "w_mean", "w_mean", "w_mean", "w_mean", "w_…
-$ estimate         &lt;dbl&gt; 3.489887, 3.138236, 3.252706, 3.462900, 3.503153, 3.7…
+$ estimate         &lt;dbl&gt; 3.487181, 3.415932, 3.225993, 3.423678, 3.542084, 3.6…
 $ estimate_se      &lt;chr&gt; "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"…
-$ base             &lt;int&gt; 2587, 74, 140, 179, 187, 100, 119, 370, 2, 89, 192, 2…
+$ base             &lt;int&gt; 2602, 63, 152, 203, 202, 120, 114, 358, 5, 96, 185, 2…
 $ base_description &lt;chr&gt; "Self-completion questionnaire, asked of a random sub…
-$ unweighted_n     &lt;int&gt; 2587, 74, 140, 179, 187, 100, 119, 370, 2, 89, 192, 2…</code></pre>
+$ unweighted_n     &lt;int&gt; 2602, 63, 152, 203, 202, 120, 114, 358, 5, 96, 185, 2…</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>trial3 <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
@@ -662,13 +688,13 @@ $ outcome          &lt;chr&gt; "libauth", "libauth", "libauth", "libauth", "liba
 $ o_lab            &lt;chr&gt; "Libertarian-authoritarian scale (TradVals to censor)…
 $ o_cat            &lt;chr&gt; "w_mean", "w_mean", "w_mean", "w_mean", "w_mean", "w_…
 $ stat             &lt;chr&gt; "w_mean", "w_mean", "w_mean", "w_mean", "w_mean", "w_…
-$ estimate         &lt;dbl&gt; 3.489887, 3.138236, 3.252706, 3.462900, 3.503153, 3.7…
-$ estimate_low     &lt;dbl&gt; 3.456141, 2.922005, 3.098427, 3.342785, 3.392300, 3.5…
-$ estimate_upp     &lt;dbl&gt; 3.523633, 3.354467, 3.406984, 3.583015, 3.614006, 3.8…
-$ base             &lt;int&gt; 2587, 74, 140, 179, 187, 100, 119, 370, 2, 89, 192, 2…
+$ estimate         &lt;dbl&gt; 3.487181, 3.415932, 3.225993, 3.423678, 3.542084, 3.6…
+$ estimate_low     &lt;dbl&gt; 3.455137, 3.195202, 3.111926, 3.323969, 3.424186, 3.5…
+$ estimate_upp     &lt;dbl&gt; 3.519225, 3.636662, 3.340061, 3.523387, 3.659982, 3.8…
+$ base             &lt;int&gt; 2602, 63, 152, 203, 202, 120, 114, 358, 5, 96, 185, 2…
 $ base_description &lt;lgl&gt; NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-$ estimate_ci      &lt;chr&gt; "3.45614117999108 - 3.52363302932802", "2.92200487459…
-$ unweighted_n     &lt;int&gt; 2587, 74, 140, 179, 187, 100, 119, 370, 2, 89, 192, 2…</code></pre>
+$ estimate_ci      &lt;chr&gt; "3.45513691119088 - 3.51922541975704", "3.19520233096…
+$ unweighted_n     &lt;int&gt; 2602, 63, 152, 203, 202, 120, 114, 358, 5, 96, 185, 2…</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>trial4 <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
@@ -711,22 +737,22 @@ $ outcome          &lt;chr&gt; "libauth", "welfare2", "leftrigh"
 $ o_lab            &lt;chr&gt; "Libertarian-authoritarian scale (TradVals to censor)…
 $ o_cat            &lt;chr&gt; "w_mean", "w_mean", "w_mean"
 $ stat             &lt;chr&gt; "w_mean", "w_mean", "w_mean"
-$ estimate         &lt;dbl&gt; 3.489887, 2.731457, 2.543509
-$ estimate_low     &lt;dbl&gt; 3.456141, 2.703453, 2.511442
-$ estimate_upp     &lt;dbl&gt; 3.523633, 2.759462, 2.575576
-$ base             &lt;int&gt; 2587, 2582, 2579
+$ estimate         &lt;dbl&gt; 3.487181, 2.735193, 2.564134
+$ estimate_low     &lt;dbl&gt; 3.455137, 2.709538, 2.530709
+$ estimate_upp     &lt;dbl&gt; 3.519225, 2.760849, 2.597558
+$ base             &lt;int&gt; 2602, 2603, 2594
 $ base_description &lt;chr&gt; "Self-completion questionnaire, asked of a random sub…
-$ estimate_ci      &lt;chr&gt; "3.45614117999108 - 3.52363302932802", "2.70345281323…
-$ unweighted_n     &lt;int&gt; 2587, 2582, 2579</code></pre>
+$ estimate_ci      &lt;chr&gt; "3.45513691119088 - 3.51922541975704", "2.70953809353…
+$ unweighted_n     &lt;int&gt; 2602, 2603, 2594</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>trial5 <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 3 × 11
   outcome  o_lab            o_cat stat  estimate estimate_low estimate_upp  base
   &lt;chr&gt;    &lt;chr&gt;            &lt;chr&gt; &lt;chr&gt;    &lt;dbl&gt;        &lt;dbl&gt;        &lt;dbl&gt; &lt;int&gt;
-1 libauth  Libertarian-aut… w_me… w_me…     3.49         3.46         3.52  2587
-2 welfare2 Welfarism scale… w_me… w_me…     2.73         2.70         2.76  2582
-3 leftrigh Left-right scal… w_me… w_me…     2.54         2.51         2.58  2579
+1 libauth  Libertarian-aut… w_me… w_me…     3.49         3.46         3.52  2602
+2 welfare2 Welfarism scale… w_me… w_me…     2.74         2.71         2.76  2603
+3 leftrigh Left-right scal… w_me… w_me…     2.56         2.53         2.60  2594
 # ℹ 3 more variables: base_description &lt;chr&gt;, estimate_ci &lt;chr&gt;,
 #   unweighted_n &lt;int&gt;</code></pre>
 </div>
@@ -849,9 +875,9 @@ $ o_cat            &lt;chr&gt; "w_median", "w_median", "w_median", "w_median", "
 $ stat             &lt;chr&gt; "w_median", "w_median", "w_median", "w_median", "w_me…
 $ estimate         &lt;dbl&gt; 3.500000, 3.500000, 3.500000, 3.333333, 3.333333, 3.5…
 $ estimate_se      &lt;chr&gt; "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"…
-$ base             &lt;int&gt; 2587, 1171, 1416, 163, 332, 416, 423, 204, 234, 812, …
+$ base             &lt;int&gt; 2602, 1217, 1385, 159, 337, 420, 420, 219, 243, 793, …
 $ base_description &lt;lgl&gt; NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-$ unweighted_n     &lt;int&gt; 2587, 1171, 1416, 163, 332, 416, 423, 204, 234, 812, …</code></pre>
+$ unweighted_n     &lt;int&gt; 2602, 1217, 1385, 159, 337, 420, 420, 219, 243, 793, …</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>trial1 <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
@@ -865,9 +891,9 @@ $ unweighted_n     &lt;int&gt; 2587, 1171, 1416, 163, 332, 416, 423, 204, 234, 8
  5 RAgeCat     RAgeCat    Age of resp… 25-34  libauth Libe… w_me… w_me…     3.33
  6 RAgeCat     RAgeCat    Age of resp… 35-44  libauth Libe… w_me… w_me…     3.5 
  7 RAgeCat     RAgeCat    Age of resp… 45-54  libauth Libe… w_me… w_me…     3.5 
- 8 RAgeCat     RAgeCat    Age of resp… 55-59  libauth Libe… w_me… w_me…     3.67
+ 8 RAgeCat     RAgeCat    Age of resp… 55-59  libauth Libe… w_me… w_me…     3.5 
  9 RAgeCat     RAgeCat    Age of resp… 60-64  libauth Libe… w_me… w_me…     3.5 
-10 RAgeCat     RAgeCat    Age of resp… 65+    libauth Libe… w_me… w_me…     3.83
+10 RAgeCat     RAgeCat    Age of resp… 65+    libauth Libe… w_me… w_me…     3.67
 # ℹ 12 more rows
 # ℹ 4 more variables: estimate_se &lt;chr&gt;, base &lt;int&gt;, base_description &lt;lgl&gt;,
 #   unweighted_n &lt;int&gt;</code></pre>
@@ -881,7 +907,7 @@ $ unweighted_n     &lt;int&gt; 2587, 1171, 1416, 163, 332, 416, 423, 204, 234, 8
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>trial2 <span class="ot">&lt;-</span> <span class="fu">weighted_median</span>(df_svy, <span class="at">outcomes =</span> <span class="fu">c</span>(<span class="st">"libauth"</span>), <span class="at">predictors =</span> <span class="fu">list</span>(<span class="fu">c</span>(<span class="st">"RSex"</span>,<span class="st">"RAgeCat"</span>,<span class="st">"skipmeal"</span>))) </span>
 <span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>trial2 <span class="sc">%&gt;%</span> <span class="fu">glimpse</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Rows: 126
+<pre><code>Rows: 124
 Columns: 19
 $ cross_break      &lt;chr&gt; "Total", "RSex_X_RAgeCat_X_skipmeal", "RSex_X_RAgeCat…
 $ predictor1       &lt;chr&gt; "Total", "RSex", "RSex", "RSex", "RSex", "RSex", "RSe…
@@ -897,15 +923,15 @@ $ outcome          &lt;chr&gt; "libauth", "libauth", "libauth", "libauth", "liba
 $ o_lab            &lt;chr&gt; "Libertarian-authoritarian scale (TradVals to censor)…
 $ o_cat            &lt;chr&gt; "w_median", "w_median", "w_median", "w_median", "w_me…
 $ stat             &lt;chr&gt; "w_median", "w_median", "w_median", "w_median", "w_me…
-$ estimate         &lt;dbl&gt; 3.500000, 3.000000, 2.833333, 2.833333, 3.666667, 3.0…
+$ estimate         &lt;dbl&gt; 3.500000, 3.166667, 3.333333, 4.333333, 2.333333, 4.3…
 $ estimate_se      &lt;chr&gt; "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"…
-$ base             &lt;int&gt; 2587, 27, 34, 3, 1, 1, 3, 3, 1, 1, 52, 65, 6, 6, 5, 3…
+$ base             &lt;int&gt; 2602, 23, 33, 2, 2, 3, 56, 75, 5, 1, 3, 2, 3, 1, 5, 1…
 $ base_description &lt;lgl&gt; NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-$ unweighted_n     &lt;int&gt; 2587, 27, 34, 3, 1, 1, 3, 3, 1, 1, 52, 65, 6, 6, 5, 3…</code></pre>
+$ unweighted_n     &lt;int&gt; 2602, 23, 33, 2, 2, 3, 56, 75, 5, 1, 3, 2, 3, 1, 5, 1…</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>trial2 <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 126 × 19
+<pre><code># A tibble: 124 × 19
    cross_break      predictor1 predictor2 predictor3 p_lab1 p_lab2 p_lab3 p_cat1
    &lt;chr&gt;            &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;  &lt;chr&gt;  &lt;chr&gt;  &lt;chr&gt; 
  1 Total            Total      Total      Total      Total  Total  Total  Total 
@@ -918,7 +944,7 @@ $ unweighted_n     &lt;int&gt; 2587, 27, 34, 3, 1, 1, 3, 3, 1, 1, 52, 65, 6, 6, 
  8 RSex_X_RAgeCat_… RSex       RAgeCat    skipmeal   Sex o… Age o… How o… Male  
  9 RSex_X_RAgeCat_… RSex       RAgeCat    skipmeal   Sex o… Age o… How o… Male  
 10 RSex_X_RAgeCat_… RSex       RAgeCat    skipmeal   Sex o… Age o… How o… Male  
-# ℹ 116 more rows
+# ℹ 114 more rows
 # ℹ 11 more variables: p_cat2 &lt;chr&gt;, p_cat3 &lt;chr&gt;, outcome &lt;chr&gt;, o_lab &lt;chr&gt;,
 #   o_cat &lt;chr&gt;, stat &lt;chr&gt;, estimate &lt;dbl&gt;, estimate_se &lt;chr&gt;, base &lt;int&gt;,
 #   base_description &lt;lgl&gt;, unweighted_n &lt;int&gt;</code></pre>
@@ -941,17 +967,17 @@ $ stat             &lt;chr&gt; "w_median"
 $ estimate         &lt;dbl&gt; 3.5
 $ estimate_low     &lt;dbl&gt; 3.5
 $ estimate_upp     &lt;dbl&gt; 3.666667
-$ base             &lt;int&gt; 2587
+$ base             &lt;int&gt; 2602
 $ base_description &lt;chr&gt; "Self-completion questionnaire, asked of a random sub…
 $ estimate_ci      &lt;chr&gt; "3.5 - 3.66666666666667"
-$ unweighted_n     &lt;int&gt; 2587</code></pre>
+$ unweighted_n     &lt;int&gt; 2602</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb44"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>trial3 <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 1 × 11
   outcome o_lab             o_cat stat  estimate estimate_low estimate_upp  base
   &lt;chr&gt;   &lt;chr&gt;             &lt;chr&gt; &lt;chr&gt;    &lt;dbl&gt;        &lt;dbl&gt;        &lt;dbl&gt; &lt;int&gt;
-1 libauth Libertarian-auth… w_me… w_me…      3.5          3.5         3.67  2587
+1 libauth Libertarian-auth… w_me… w_me…      3.5          3.5         3.67  2602
 # ℹ 3 more variables: base_description &lt;chr&gt;, estimate_ci &lt;chr&gt;,
 #   unweighted_n &lt;int&gt;</code></pre>
 </div>
@@ -1072,27 +1098,27 @@ $ outcome          &lt;chr&gt; "libauth", "libauth", "libauth", "libauth", "liba
 $ o_lab            &lt;chr&gt; "Libertarian-authoritarian scale (TradVals to censor)…
 $ o_cat            &lt;chr&gt; "w_sum", "w_sum", "w_sum", "w_sum", "w_sum", "w_sum",…
 $ stat             &lt;chr&gt; "w_sum", "w_sum", "w_sum", "w_sum", "w_sum", "w_sum",…
-$ estimate         &lt;dbl&gt; 9022.307541, 4414.313854, 4607.993686, 928.522425, 14…
+$ estimate         &lt;dbl&gt; 9070.66403, 4531.95232, 4538.71170, 953.90065, 1376.4…
 $ estimate_se      &lt;chr&gt; "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"…
-$ base             &lt;int&gt; 2587, 1171, 1416, 163, 332, 416, 423, 204, 234, 812, …
+$ base             &lt;int&gt; 2602, 1217, 1385, 159, 337, 420, 420, 219, 243, 793, …
 $ base_description &lt;lgl&gt; NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-$ unweighted_n     &lt;int&gt; 2587, 1171, 1416, 163, 332, 416, 423, 204, 234, 812, …</code></pre>
+$ unweighted_n     &lt;int&gt; 2602, 1217, 1385, 159, 337, 420, 420, 219, 243, 793, …</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>trial1 <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 22 × 13
    cross_break predictor1 p_lab1       p_cat1 outcome o_lab o_cat stat  estimate
    &lt;chr&gt;       &lt;chr&gt;      &lt;chr&gt;        &lt;chr&gt;  &lt;chr&gt;   &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;    &lt;dbl&gt;
- 1 Total       Total      Total        Total  libauth Libe… w_sum w_sum    9022.
- 2 RSex        RSex       Sex of resp… Male   libauth Libe… w_sum w_sum    4414.
- 3 RSex        RSex       Sex of resp… Female libauth Libe… w_sum w_sum    4608.
- 4 RAgeCat     RAgeCat    Age of resp… 18-24  libauth Libe… w_sum w_sum     929.
- 5 RAgeCat     RAgeCat    Age of resp… 25-34  libauth Libe… w_sum w_sum    1432.
- 6 RAgeCat     RAgeCat    Age of resp… 35-44  libauth Libe… w_sum w_sum    1390.
- 7 RAgeCat     RAgeCat    Age of resp… 45-54  libauth Libe… w_sum w_sum    1537.
- 8 RAgeCat     RAgeCat    Age of resp… 55-59  libauth Libe… w_sum w_sum     771.
- 9 RAgeCat     RAgeCat    Age of resp… 60-64  libauth Libe… w_sum w_sum     707.
-10 RAgeCat     RAgeCat    Age of resp… 65+    libauth Libe… w_sum w_sum    2249.
+ 1 Total       Total      Total        Total  libauth Libe… w_sum w_sum    9071.
+ 2 RSex        RSex       Sex of resp… Male   libauth Libe… w_sum w_sum    4532.
+ 3 RSex        RSex       Sex of resp… Female libauth Libe… w_sum w_sum    4539.
+ 4 RAgeCat     RAgeCat    Age of resp… 18-24  libauth Libe… w_sum w_sum     954.
+ 5 RAgeCat     RAgeCat    Age of resp… 25-34  libauth Libe… w_sum w_sum    1376.
+ 6 RAgeCat     RAgeCat    Age of resp… 35-44  libauth Libe… w_sum w_sum    1405.
+ 7 RAgeCat     RAgeCat    Age of resp… 45-54  libauth Libe… w_sum w_sum    1536.
+ 8 RAgeCat     RAgeCat    Age of resp… 55-59  libauth Libe… w_sum w_sum     830.
+ 9 RAgeCat     RAgeCat    Age of resp… 60-64  libauth Libe… w_sum w_sum     719.
+10 RAgeCat     RAgeCat    Age of resp… 65+    libauth Libe… w_sum w_sum    2198.
 # ℹ 12 more rows
 # ℹ 4 more variables: estimate_se &lt;chr&gt;, base &lt;int&gt;, base_description &lt;lgl&gt;,
 #   unweighted_n &lt;int&gt;</code></pre>
@@ -1106,7 +1132,7 @@ $ unweighted_n     &lt;int&gt; 2587, 1171, 1416, 163, 332, 416, 423, 204, 234, 8
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>trial2 <span class="ot">&lt;-</span> <span class="fu">weighted_sum</span>(df_svy, <span class="at">outcomes =</span> <span class="fu">c</span>(<span class="st">"libauth"</span>), <span class="at">predictors =</span> <span class="fu">list</span>(<span class="fu">c</span>(<span class="st">"RSex"</span>,<span class="st">"RAgeCat"</span>,<span class="st">"skipmeal"</span>)), <span class="at">base =</span> example_of_base_information)</span>
 <span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>trial2 <span class="sc">%&gt;%</span> glimpse</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Rows: 126
+<pre><code>Rows: 124
 Columns: 19
 $ cross_break      &lt;chr&gt; "Total", "RSex_X_RAgeCat_X_skipmeal", "RSex_X_RAgeCat…
 $ predictor1       &lt;chr&gt; "Total", "RSex", "RSex", "RSex", "RSex", "RSex", "RSe…
@@ -1122,15 +1148,15 @@ $ outcome          &lt;chr&gt; "libauth", "libauth", "libauth", "libauth", "liba
 $ o_lab            &lt;chr&gt; "Libertarian-authoritarian scale (TradVals to censor)…
 $ o_cat            &lt;chr&gt; "w_sum", "w_sum", "w_sum", "w_sum", "w_sum", "w_sum",…
 $ stat             &lt;chr&gt; "w_sum", "w_sum", "w_sum", "w_sum", "w_sum", "w_sum",…
-$ estimate         &lt;dbl&gt; 9022.307541, 180.659821, 191.281655, 22.348152, 5.097…
+$ estimate         &lt;dbl&gt; 9070.664027, 158.274048, 213.155984, 11.661185, 5.892…
 $ estimate_se      &lt;chr&gt; "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"…
-$ base             &lt;int&gt; 2587, 27, 34, 3, 1, 1, 3, 3, 1, 1, 52, 65, 6, 6, 5, 3…
+$ base             &lt;int&gt; 2602, 23, 33, 2, 2, 3, 56, 75, 5, 1, 3, 2, 3, 1, 5, 1…
 $ base_description &lt;chr&gt; "Self-completion questionnaire, asked of a random sub…
-$ unweighted_n     &lt;int&gt; 2587, 27, 34, 3, 1, 1, 3, 3, 1, 1, 52, 65, 6, 6, 5, 3…</code></pre>
+$ unweighted_n     &lt;int&gt; 2602, 23, 33, 2, 2, 3, 56, 75, 5, 1, 3, 2, 3, 1, 5, 1…</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a>trial2 <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 126 × 19
+<pre><code># A tibble: 124 × 19
    cross_break      predictor1 predictor2 predictor3 p_lab1 p_lab2 p_lab3 p_cat1
    &lt;chr&gt;            &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;  &lt;chr&gt;  &lt;chr&gt;  &lt;chr&gt; 
  1 Total            Total      Total      Total      Total  Total  Total  Total 
@@ -1143,7 +1169,7 @@ $ unweighted_n     &lt;int&gt; 2587, 27, 34, 3, 1, 1, 3, 3, 1, 1, 52, 65, 6, 6, 
  8 RSex_X_RAgeCat_… RSex       RAgeCat    skipmeal   Sex o… Age o… How o… Male  
  9 RSex_X_RAgeCat_… RSex       RAgeCat    skipmeal   Sex o… Age o… How o… Male  
 10 RSex_X_RAgeCat_… RSex       RAgeCat    skipmeal   Sex o… Age o… How o… Male  
-# ℹ 116 more rows
+# ℹ 114 more rows
 # ℹ 11 more variables: p_cat2 &lt;chr&gt;, p_cat3 &lt;chr&gt;, outcome &lt;chr&gt;, o_lab &lt;chr&gt;,
 #   o_cat &lt;chr&gt;, stat &lt;chr&gt;, estimate &lt;dbl&gt;, estimate_se &lt;chr&gt;, base &lt;int&gt;,
 #   base_description &lt;chr&gt;, unweighted_n &lt;int&gt;</code></pre>
@@ -1167,25 +1193,25 @@ $ outcome          &lt;chr&gt; "libauth", "libauth", "libauth", "leftrigh", "lef
 $ o_lab            &lt;chr&gt; "Libertarian-authoritarian scale (TradVals to censor)…
 $ o_cat            &lt;chr&gt; "w_sum", "w_sum", "w_sum", "w_sum", "w_sum", "w_sum"
 $ stat             &lt;chr&gt; "w_sum", "w_sum", "w_sum", "w_sum", "w_sum", "w_sum"
-$ estimate         &lt;dbl&gt; 9022.308, 4414.314, 4607.994, 6559.602, 3162.732, 339…
-$ estimate_low     &lt;dbl&gt; 8773.523, 4166.108, 4387.037, 6363.960, 2974.112, 322…
-$ estimate_upp     &lt;dbl&gt; 9271.092, 4662.519, 4828.950, 6755.244, 3351.352, 356…
-$ base             &lt;int&gt; 2587, 1171, 1416, 2579, 1167, 1412
+$ estimate         &lt;dbl&gt; 9070.664, 4531.952, 4538.712, 6645.845, 3250.198, 339…
+$ estimate_low     &lt;dbl&gt; 8829.209, 4287.339, 4320.668, 6451.568, 3063.642, 322…
+$ estimate_upp     &lt;dbl&gt; 9312.119, 4776.566, 4756.756, 6840.123, 3436.755, 356…
+$ base             &lt;int&gt; 2602, 1217, 1385, 2594, 1212, 1382
 $ base_description &lt;lgl&gt; NA, NA, NA, NA, NA, NA
-$ estimate_ci      &lt;chr&gt; "8773.52329440032 - 9271.09178704237", "4166.10823940…
-$ unweighted_n     &lt;int&gt; 2587, 1171, 1416, 2579, 1167, 1412</code></pre>
+$ estimate_ci      &lt;chr&gt; "8829.20858625497 - 9312.11946797192", "4287.33884425…
+$ unweighted_n     &lt;int&gt; 2602, 1217, 1385, 2594, 1212, 1382</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb57"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a>trial3 <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 6 × 15
   cross_break predictor1 p_lab1        p_cat1 outcome o_lab o_cat stat  estimate
   &lt;chr&gt;       &lt;chr&gt;      &lt;chr&gt;         &lt;chr&gt;  &lt;chr&gt;   &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;    &lt;dbl&gt;
-1 Total       Total      Total         Total  libauth Libe… w_sum w_sum    9022.
-2 RSex        RSex       Sex of respo… Male   libauth Libe… w_sum w_sum    4414.
-3 RSex        RSex       Sex of respo… Female libauth Libe… w_sum w_sum    4608.
-4 Total       Total      Total         Total  leftri… Left… w_sum w_sum    6560.
-5 RSex        RSex       Sex of respo… Male   leftri… Left… w_sum w_sum    3163.
-6 RSex        RSex       Sex of respo… Female leftri… Left… w_sum w_sum    3397.
+1 Total       Total      Total         Total  libauth Libe… w_sum w_sum    9071.
+2 RSex        RSex       Sex of respo… Male   libauth Libe… w_sum w_sum    4532.
+3 RSex        RSex       Sex of respo… Female libauth Libe… w_sum w_sum    4539.
+4 Total       Total      Total         Total  leftri… Left… w_sum w_sum    6646.
+5 RSex        RSex       Sex of respo… Male   leftri… Left… w_sum w_sum    3250.
+6 RSex        RSex       Sex of respo… Female leftri… Left… w_sum w_sum    3396.
 # ℹ 6 more variables: estimate_low &lt;dbl&gt;, estimate_upp &lt;dbl&gt;, base &lt;int&gt;,
 #   base_description &lt;lgl&gt;, estimate_ci &lt;chr&gt;, unweighted_n &lt;int&gt;</code></pre>
 </div>
@@ -1297,7 +1323,7 @@ $ unweighted_n     &lt;int&gt; 2587, 1171, 1416, 2579, 1167, 1412</code></pre>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb60"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a>trial <span class="ot">&lt;-</span> <span class="fu">weighted_perc</span>(df_svy, <span class="at">outcomes =</span> <span class="fu">c</span>(<span class="st">"skipmeal"</span>), <span class="at">predictors =</span> <span class="fu">list</span>(<span class="st">"RSex"</span>,<span class="st">"RAgeCat"</span>)) </span>
 <span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>trial <span class="sc">%&gt;%</span> <span class="fu">glimpse</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Rows: 101
+<pre><code>Rows: 97
 Columns: 13
 $ cross_break      &lt;chr&gt; "Total", "Total", "Total", "Total", "Total", "Total",…
 $ predictor1       &lt;chr&gt; "Total", "Total", "Total", "Total", "Total", "Total",…
@@ -1307,7 +1333,7 @@ $ outcome          &lt;chr&gt; "skipmeal", "skipmeal", "skipmeal", "skipmeal", "
 $ o_lab            &lt;chr&gt; "How often do you or other members of your household …
 $ o_cat            &lt;fct&gt; "skip, didn`t return SC questionnaire", "Never", "Les…
 $ stat             &lt;chr&gt; "w_perc", "w_perc", "w_perc", "w_perc", "w_perc", "w_…
-$ estimate         &lt;dbl&gt; 0.467744743, 0.432422812, 0.025655512, 0.008089523, 0…
+$ estimate         &lt;dbl&gt; 0.461087835, 0.446487452, 0.027901243, 0.005575794, 0…
 $ estimate_se      &lt;chr&gt; "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"…
 $ base             &lt;int&gt; 3224, 3224, 3224, 3224, 3224, 3224, 3224, 3224, 3224,…
 $ base_description &lt;lgl&gt; NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
@@ -1315,20 +1341,20 @@ $ unweighted_n     &lt;int&gt; 3224, 3224, 3224, 3224, 3224, 3224, 3224, 3224, 3
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb62"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a>trial <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 101 × 13
+<pre><code># A tibble: 97 × 13
    cross_break predictor1 p_lab1 p_cat1 outcome  o_lab      o_cat stat  estimate
    &lt;chr&gt;       &lt;chr&gt;      &lt;chr&gt;  &lt;chr&gt;  &lt;chr&gt;    &lt;chr&gt;      &lt;fct&gt; &lt;chr&gt;    &lt;dbl&gt;
- 1 Total       Total      Total  Total  skipmeal How often… skip… w_pe…  0.468  
- 2 Total       Total      Total  Total  skipmeal How often… Never w_pe…  0.432  
- 3 Total       Total      Total  Total  skipmeal How often… Less… w_pe…  0.0257 
- 4 Total       Total      Total  Total  skipmeal How often… Once… w_pe…  0.00809
- 5 Total       Total      Total  Total  skipmeal How often… Seve… w_pe…  0.0159 
- 6 Total       Total      Total  Total  skipmeal How often… Once… w_pe…  0.00935
- 7 Total       Total      Total  Total  skipmeal How often… Seve… w_pe…  0.00862
- 8 Total       Total      Total  Total  skipmeal How often… Ever… w_pe…  0.00420
- 9 Total       Total      Total  Total  skipmeal How often… Can'… w_pe…  0.0190 
-10 Total       Total      Total  Total  skipmeal How often… Not … w_pe…  0.00906
-# ℹ 91 more rows
+ 1 Total       Total      Total  Total  skipmeal How often… skip… w_pe…  0.461  
+ 2 Total       Total      Total  Total  skipmeal How often… Never w_pe…  0.446  
+ 3 Total       Total      Total  Total  skipmeal How often… Less… w_pe…  0.0279 
+ 4 Total       Total      Total  Total  skipmeal How often… Once… w_pe…  0.00558
+ 5 Total       Total      Total  Total  skipmeal How often… Seve… w_pe…  0.0139 
+ 6 Total       Total      Total  Total  skipmeal How often… Once… w_pe…  0.00750
+ 7 Total       Total      Total  Total  skipmeal How often… Seve… w_pe…  0.00770
+ 8 Total       Total      Total  Total  skipmeal How often… Ever… w_pe…  0.00426
+ 9 Total       Total      Total  Total  skipmeal How often… Can'… w_pe…  0.0189 
+10 Total       Total      Total  Total  skipmeal How often… Not … w_pe…  0.00668
+# ℹ 87 more rows
 # ℹ 4 more variables: estimate_se &lt;chr&gt;, base &lt;int&gt;, base_description &lt;lgl&gt;,
 #   unweighted_n &lt;int&gt;</code></pre>
 </div>
@@ -1341,7 +1367,7 @@ $ unweighted_n     &lt;int&gt; 3224, 3224, 3224, 3224, 3224, 3224, 3224, 3224, 3
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb64"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a>trial2 <span class="ot">&lt;-</span> <span class="fu">weighted_perc</span>(df_svy, <span class="at">outcomes =</span> <span class="fu">c</span>(<span class="st">"MuchPov"</span>), <span class="at">predictors =</span> <span class="fu">list</span>(<span class="fu">c</span>(<span class="st">"RSex"</span>,<span class="st">"RAgeCat"</span>,<span class="st">"skipmeal"</span>)), <span class="at">base =</span> example_of_base_information) </span>
 <span id="cb64-2"><a href="#cb64-2" aria-hidden="true" tabindex="-1"></a>trial2 <span class="sc">%&gt;%</span> glimpse</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Rows: 240
+<pre><code>Rows: 237
 Columns: 19
 $ cross_break      &lt;chr&gt; "Total", "Total", "Total", "Total", "RSex_X_RAgeCat_X…
 $ predictor1       &lt;chr&gt; "Total", "Total", "Total", "Total", "RSex", "RSex", "…
@@ -1357,15 +1383,15 @@ $ outcome          &lt;chr&gt; "MuchPov", "MuchPov", "MuchPov", "MuchPov", "Much
 $ o_lab            &lt;chr&gt; "Some people say there is very little real poverty in…
 $ o_cat            &lt;fct&gt; "... that there is very little real poverty in Britai…
 $ stat             &lt;chr&gt; "w_perc", "w_perc", "w_perc", "w_perc", "w_perc", "w_…
-$ estimate         &lt;dbl&gt; 0.285134273, 0.675733528, 0.038068212, 0.001063987, 0…
+$ estimate         &lt;dbl&gt; 0.2963261777, 0.6646071530, 0.0385730482, 0.000493621…
 $ estimate_se      &lt;chr&gt; "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"…
-$ base             &lt;int&gt; 3224, 3224, 3224, 3224, 43, 43, 43, 35, 35, 35, 3, 3,…
+$ base             &lt;int&gt; 3224, 3224, 3224, 3224, 39, 39, 39, 33, 33, 33, 2, 2,…
 $ base_description &lt;chr&gt; "Asked of all respondents:-  Some people say there is…
-$ unweighted_n     &lt;int&gt; 3224, 3224, 3224, 3224, 43, 43, 43, 35, 35, 35, 3, 3,…</code></pre>
+$ unweighted_n     &lt;int&gt; 3224, 3224, 3224, 3224, 39, 39, 39, 33, 33, 33, 2, 2,…</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb66"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a>trial2 <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 240 × 19
+<pre><code># A tibble: 237 × 19
    cross_break      predictor1 predictor2 predictor3 p_lab1 p_lab2 p_lab3 p_cat1
    &lt;chr&gt;            &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;  &lt;chr&gt;  &lt;chr&gt;  &lt;chr&gt; 
  1 Total            Total      Total      Total      Total  Total  Total  Total 
@@ -1378,7 +1404,7 @@ $ unweighted_n     &lt;int&gt; 3224, 3224, 3224, 3224, 43, 43, 43, 35, 35, 35, 3
  8 RSex_X_RAgeCat_… RSex       RAgeCat    skipmeal   Sex o… Age o… How o… Male  
  9 RSex_X_RAgeCat_… RSex       RAgeCat    skipmeal   Sex o… Age o… How o… Male  
 10 RSex_X_RAgeCat_… RSex       RAgeCat    skipmeal   Sex o… Age o… How o… Male  
-# ℹ 230 more rows
+# ℹ 227 more rows
 # ℹ 11 more variables: p_cat2 &lt;chr&gt;, p_cat3 &lt;chr&gt;, outcome &lt;chr&gt;, o_lab &lt;chr&gt;,
 #   o_cat &lt;fct&gt;, stat &lt;chr&gt;, estimate &lt;dbl&gt;, estimate_se &lt;chr&gt;, base &lt;int&gt;,
 #   base_description &lt;chr&gt;, unweighted_n &lt;int&gt;</code></pre>
@@ -1491,7 +1517,7 @@ $ unweighted_n     &lt;int&gt; 3224, 3224, 3224, 3224, 43, 43, 43, 35, 35, 35, 3
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb69"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a>trial <span class="ot">&lt;-</span> <span class="fu">weighted_count</span>(df_svy, <span class="at">outcomes =</span> <span class="fu">c</span>(<span class="st">"skipmeal"</span>), <span class="at">predictors =</span> <span class="fu">list</span>(<span class="st">"RSex"</span>,<span class="st">"RAgeCat"</span>)) </span>
 <span id="cb69-2"><a href="#cb69-2" aria-hidden="true" tabindex="-1"></a>trial <span class="sc">%&gt;%</span> <span class="fu">glimpse</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Rows: 101
+<pre><code>Rows: 97
 Columns: 13
 $ cross_break      &lt;chr&gt; "Total", "Total", "Total", "Total", "Total", "Total",…
 $ predictor1       &lt;chr&gt; "Total", "Total", "Total", "Total", "Total", "Total",…
@@ -1501,28 +1527,28 @@ $ outcome          &lt;chr&gt; "skipmeal", "skipmeal", "skipmeal", "skipmeal", "
 $ o_lab            &lt;chr&gt; "How often do you or other members of your household …
 $ o_cat            &lt;fct&gt; "skip, didn`t return SC questionnaire", "Never", "Les…
 $ stat             &lt;chr&gt; "w_count", "w_count", "w_count", "w_count", "w_count"…
-$ estimate         &lt;dbl&gt; 1508.009052, 1394.131143, 82.713369, 26.080621, 51.20…
+$ estimate         &lt;dbl&gt; 1485.418762, 1438.382859, 89.885323, 17.962714, 44.85…
 $ estimate_se      &lt;chr&gt; "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"…
 $ base             &lt;int&gt; 3224, 3224, 3224, 3224, 3224, 3224, 3224, 3224, 3224,…
 $ base_description &lt;lgl&gt; NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…
-$ unweighted_n     &lt;int&gt; 1483, 1407, 78, 32, 53, 39, 30, 18, 54, 30, 665, 640,…</code></pre>
+$ unweighted_n     &lt;int&gt; 1463, 1448, 75, 25, 49, 36, 29, 18, 55, 26, 675, 683,…</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb71"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb71-1"><a href="#cb71-1" aria-hidden="true" tabindex="-1"></a>trial <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 101 × 13
+<pre><code># A tibble: 97 × 13
    cross_break predictor1 p_lab1 p_cat1 outcome  o_lab      o_cat stat  estimate
    &lt;chr&gt;       &lt;chr&gt;      &lt;chr&gt;  &lt;chr&gt;  &lt;chr&gt;    &lt;chr&gt;      &lt;fct&gt; &lt;chr&gt;    &lt;dbl&gt;
- 1 Total       Total      Total  Total  skipmeal How often… skip… w_co…   1508. 
- 2 Total       Total      Total  Total  skipmeal How often… Never w_co…   1394. 
- 3 Total       Total      Total  Total  skipmeal How often… Less… w_co…     82.7
- 4 Total       Total      Total  Total  skipmeal How often… Once… w_co…     26.1
- 5 Total       Total      Total  Total  skipmeal How often… Seve… w_co…     51.2
- 6 Total       Total      Total  Total  skipmeal How often… Once… w_co…     30.1
- 7 Total       Total      Total  Total  skipmeal How often… Seve… w_co…     27.8
- 8 Total       Total      Total  Total  skipmeal How often… Ever… w_co…     13.6
- 9 Total       Total      Total  Total  skipmeal How often… Can'… w_co…     61.2
-10 Total       Total      Total  Total  skipmeal How often… Not … w_co…     29.2
-# ℹ 91 more rows
+ 1 Total       Total      Total  Total  skipmeal How often… skip… w_co…   1485. 
+ 2 Total       Total      Total  Total  skipmeal How often… Never w_co…   1438. 
+ 3 Total       Total      Total  Total  skipmeal How often… Less… w_co…     89.9
+ 4 Total       Total      Total  Total  skipmeal How often… Once… w_co…     18.0
+ 5 Total       Total      Total  Total  skipmeal How often… Seve… w_co…     44.9
+ 6 Total       Total      Total  Total  skipmeal How often… Once… w_co…     24.2
+ 7 Total       Total      Total  Total  skipmeal How often… Seve… w_co…     24.8
+ 8 Total       Total      Total  Total  skipmeal How often… Ever… w_co…     13.7
+ 9 Total       Total      Total  Total  skipmeal How often… Can'… w_co…     60.8
+10 Total       Total      Total  Total  skipmeal How often… Not … w_co…     21.5
+# ℹ 87 more rows
 # ℹ 4 more variables: estimate_se &lt;chr&gt;, base &lt;int&gt;, base_description &lt;lgl&gt;,
 #   unweighted_n &lt;int&gt;</code></pre>
 </div>
@@ -1535,7 +1561,7 @@ $ unweighted_n     &lt;int&gt; 1483, 1407, 78, 32, 53, 39, 30, 18, 54, 30, 665, 
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb73"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb73-1"><a href="#cb73-1" aria-hidden="true" tabindex="-1"></a>trial <span class="ot">&lt;-</span> <span class="fu">weighted_count</span>(df_svy, <span class="at">outcomes =</span> <span class="fu">c</span>(<span class="st">"MuchPov"</span>), <span class="at">predictors =</span> <span class="fu">list</span>(<span class="fu">c</span>(<span class="st">"RSex"</span>,<span class="st">"RAgeCat"</span>,<span class="st">"skipmeal"</span>)), <span class="at">base =</span> example_of_base_information) </span>
 <span id="cb73-2"><a href="#cb73-2" aria-hidden="true" tabindex="-1"></a>trial <span class="sc">%&gt;%</span> glimpse</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Rows: 240
+<pre><code>Rows: 237
 Columns: 19
 $ cross_break      &lt;chr&gt; "Total", "Total", "Total", "Total", "RSex_X_RAgeCat_X…
 $ predictor1       &lt;chr&gt; "Total", "Total", "Total", "Total", "RSex", "RSex", "…
@@ -1551,15 +1577,15 @@ $ outcome          &lt;chr&gt; "MuchPov", "MuchPov", "MuchPov", "MuchPov", "Much
 $ o_lab            &lt;chr&gt; "Some people say there is very little real poverty in…
 $ o_cat            &lt;fct&gt; "... that there is very little real poverty in Britai…
 $ stat             &lt;chr&gt; "w_count", "w_count", "w_count", "w_count", "w_count"…
-$ estimate         &lt;dbl&gt; 919.2728958, 2178.5648958, 122.7319155, 3.4302928, 31…
+$ estimate         &lt;dbl&gt; 954.6303996, 2141.0669722, 124.2651078, 1.5902266, 23…
 $ estimate_se      &lt;chr&gt; "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"…
-$ base             &lt;int&gt; 3224, 3224, 3224, 3224, 43, 43, 43, 35, 35, 35, 3, 3,…
+$ base             &lt;int&gt; 3224, 3224, 3224, 3224, 39, 39, 39, 33, 33, 33, 2, 2,…
 $ base_description &lt;chr&gt; "Asked of all respondents:-  Some people say there is…
-$ unweighted_n     &lt;int&gt; 910, 2179, 131, 4, 12, 28, 3, 7, 27, 1, 1, 2, 1, 1, 3…</code></pre>
+$ unweighted_n     &lt;int&gt; 932, 2151, 139, 2, 10, 28, 1, 6, 24, 3, 1, 1, 2, 1, 2…</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb75"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb75-1"><a href="#cb75-1" aria-hidden="true" tabindex="-1"></a>trial <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 240 × 19
+<pre><code># A tibble: 237 × 19
    cross_break      predictor1 predictor2 predictor3 p_lab1 p_lab2 p_lab3 p_cat1
    &lt;chr&gt;            &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;      &lt;chr&gt;  &lt;chr&gt;  &lt;chr&gt;  &lt;chr&gt; 
  1 Total            Total      Total      Total      Total  Total  Total  Total 
@@ -1572,7 +1598,7 @@ $ unweighted_n     &lt;int&gt; 910, 2179, 131, 4, 12, 28, 3, 7, 27, 1, 1, 2, 1, 
  8 RSex_X_RAgeCat_… RSex       RAgeCat    skipmeal   Sex o… Age o… How o… Male  
  9 RSex_X_RAgeCat_… RSex       RAgeCat    skipmeal   Sex o… Age o… How o… Male  
 10 RSex_X_RAgeCat_… RSex       RAgeCat    skipmeal   Sex o… Age o… How o… Male  
-# ℹ 230 more rows
+# ℹ 227 more rows
 # ℹ 11 more variables: p_cat2 &lt;chr&gt;, p_cat3 &lt;chr&gt;, outcome &lt;chr&gt;, o_lab &lt;chr&gt;,
 #   o_cat &lt;fct&gt;, stat &lt;chr&gt;, estimate &lt;dbl&gt;, estimate_se &lt;chr&gt;, base &lt;int&gt;,
 #   base_description &lt;chr&gt;, unweighted_n &lt;int&gt;</code></pre>
@@ -1592,23 +1618,23 @@ $ outcome          &lt;chr&gt; "MuchPov", "MuchPov", "MuchPov", "MuchPov"
 $ o_lab            &lt;chr&gt; "Some people say there is very little real poverty in…
 $ o_cat            &lt;fct&gt; "... that there is very little real poverty in Britai…
 $ stat             &lt;chr&gt; "w_count", "w_count", "w_count", "w_count"
-$ estimate         &lt;dbl&gt; 919.272896, 2178.564896, 122.731916, 3.430293
-$ estimate_low     &lt;dbl&gt; 859.00155274, 2106.93701771, 99.47405902, -0.04495413
-$ estimate_upp     &lt;dbl&gt; 979.54424, 2250.19277, 145.98977, 6.90554
+$ estimate         &lt;dbl&gt; 954.630400, 2141.066972, 124.265108, 1.590227
+$ estimate_low     &lt;dbl&gt; 893.8059418, 2070.6195629, 101.0958570, -0.6342319
+$ estimate_upp     &lt;dbl&gt; 1015.454858, 2211.514381, 147.434359, 3.814685
 $ base             &lt;int&gt; 3224, 3224, 3224, 3224
 $ base_description &lt;lgl&gt; NA, NA, NA, NA
-$ unweighted_n     &lt;int&gt; 910, 2179, 131, 4
-$ estimate_ci      &lt;chr&gt; "859.001552742815 - 979.544238953326", "2106.93701770…</code></pre>
+$ unweighted_n     &lt;int&gt; 932, 2151, 139, 2
+$ estimate_ci      &lt;chr&gt; "893.805941774303 - 1015.45485751882", "2070.61956287…</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb79"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb79-1"><a href="#cb79-1" aria-hidden="true" tabindex="-1"></a>trial <span class="sc">%&gt;%</span> <span class="fu">print</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 4 × 11
   outcome o_lab             o_cat stat  estimate estimate_low estimate_upp  base
   &lt;chr&gt;   &lt;chr&gt;             &lt;fct&gt; &lt;chr&gt;    &lt;dbl&gt;        &lt;dbl&gt;        &lt;dbl&gt; &lt;int&gt;
-1 MuchPov Some people say … ... … w_co…   919.       859.           980.    3224
-2 MuchPov Some people say … or, … w_co…  2179.      2107.          2250.    3224
-3 MuchPov Some people say … Don`… w_co…   123.        99.5          146.    3224
-4 MuchPov Some people say … Refu… w_co…     3.43      -0.0450         6.91  3224
+1 MuchPov Some people say … ... … w_co…   955.        894.         1015.    3224
+2 MuchPov Some people say … or, … w_co…  2141.       2071.         2212.    3224
+3 MuchPov Some people say … Don`… w_co…   124.        101.          147.    3224
+4 MuchPov Some people say … Refu… w_co…     1.59       -0.634         3.81  3224
 # ℹ 3 more variables: base_description &lt;lgl&gt;, unweighted_n &lt;int&gt;,
 #   estimate_ci &lt;chr&gt;</code></pre>
 </div>

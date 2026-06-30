@@ -13,6 +13,7 @@ library(tidyverse)
 library(srvyr)
 library(flextable)
 library(haven)
+library(here)
 library(labelled)
 library(huxtable)
 ```
@@ -24,7 +25,9 @@ library(huxtable)
 ```{r}
 
 ## Load data
-source("Set file paths.R")
+df2         <- readRDS(here::here("data", "synthetic_bsa_clean.rds"))
+df_svy      <- df2 %>% srvyr::as_survey_design(weight = WtFactor)
+load(here::here("data", "synthetic_multicode_data.rds"))
 
 ## Load functions
 source("Scripts/source_folder_r.R")
@@ -143,7 +146,9 @@ trial1 <- calc_stats(
     outcomes = c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC", "Q1_OptionD", "Q1_OptionE", 
                  "Q2_ChoiceA", "Q2_ChoiceB", "Q2_ChoiceC", "Q2_ChoiceD", "Q2_ChoiceE",
                  "AgeGroup", "Satisfaction"),
-    conf = "se") 
+    conf = "se", 
+    multicode = F
+    ) 
 
 trial1 %>% print()
 trial1 %>% glimpse
@@ -161,7 +166,9 @@ trial2 <- calc_stats(
                  "Q2_ChoiceA", "Q2_ChoiceB", "Q2_ChoiceC", "Q2_ChoiceD", "Q2_ChoiceE", 
                  "Satisfaction"),
     predictors = "AgeGroup",
-    conf = "se") 
+    conf = "se",
+    multicode = F
+   ) 
 
 trial2 %>% print()
 trial2 %>% glimpse
@@ -177,7 +184,9 @@ trial3 <- calc_stats(
     outcomes = c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC", "Q1_OptionD", "Q1_OptionE", 
                  "Q2_ChoiceA", "Q2_ChoiceB", "Q2_ChoiceC", "Q2_ChoiceD", "Q2_ChoiceE"),
     predictors = list(c("AgeGroup","Satisfaction")),
-    conf = "se") 
+    conf = "se",     
+    multicode = F
+  ) 
 
 trial3 %>% print()
 trial3 %>% glimpse

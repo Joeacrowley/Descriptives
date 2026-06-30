@@ -13,6 +13,7 @@ library(tidyverse)
 library(srvyr)
 library(flextable)
 library(haven)
+library(here)
 library(labelled)
 library(huxtable)
 ```
@@ -24,7 +25,9 @@ library(huxtable)
 ```{r}
 
 ## Load data
-source("Set file paths.R")
+df2         <- readRDS(here::here("data", "synthetic_bsa_clean.rds"))
+df_svy      <- df2 %>% srvyr::as_survey_design(weight = WtFactor)
+load(here::here("data", "synthetic_multicode_data.rds"))
 
 ## Load functions
 source("Scripts/source_folder_r.R")
@@ -402,7 +405,7 @@ test1 <- calc_stats(data = df_svy,
            conf = "ci", pval = T) 
 
 
-test1 %>% print(n=1000)
+test1 
 
 test1 %>% pull(p_value)
 
@@ -429,8 +432,8 @@ calc_stats(data = df2,
 calc_stats(data = df2, 
            outcomes = c("libauth","welfare2", "leftrigh"), 
            predictors = list(c("RSex", "RAgeCat"), "MuchPov2"), 
-           pval = T) %>% 
-  print(n=1000)
+           pval = T) 
+
 
 ```
 
@@ -443,8 +446,8 @@ calc_stats(data = df2,
 calc_stats(data = df2, 
            outcomes = c("libauth","welfare2", "leftrigh"), 
            predictors = list("RSex", "RAgeCat", "MuchPov2", c("RSex", "MuchPov2")),
-           pval = T) %>%
-  print(n=1000)
+           pval = T) 
+
 
 
 ```
@@ -492,7 +495,7 @@ test7 <- calc_stats(data = df_svy,
            ## predictors = list(c("RSex","skipmeal2","MuchPov2")),
            statistics = c("w_perc","mean"), 
            base = example_of_base_information,
-           conf = "ci") %>% print(n=1000)
+           conf = "ci") 
 
 ```
 
@@ -505,7 +508,7 @@ test7 <- calc_stats(data = df_svy,
            predictors = list("RSex"),
            statistics = c("w_perc","mean"), 
            base = example_of_base_information,
-           conf = "ci") %>% print(n=1000)
+           conf = "ci") 
 
 ```
 
@@ -520,7 +523,7 @@ test8 <- calc_stats(data = df_svy,
            # predictors = list("RSex"),
            statistics = c("w_perc","mean"), 
            base = example_of_base_information,
-           conf = "ci") %>% print(n=1000)
+           conf = "ci") 
 
 
 ```
