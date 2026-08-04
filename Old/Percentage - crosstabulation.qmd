@@ -63,14 +63,16 @@ tbl <- calc_stats(
           data = df2,
           outcomes = "leftrigh2",
           predictors = "RAgeCat",
-          pval = T, conf = "ci",
+          pval = T, 
+          conf = "ci",
           statistics = "perc"
           )
 
 tbl
+
 ```
 
-```{r}
+```{r, error=T}
 
 make_hux <- function(table){
 
@@ -93,40 +95,45 @@ top_of_table <- make_hux(table = tbl)
 
 top_of_table %>% huxtable::theme_striped()
 
-```
-
-```{r, error=T}
-
-values <-
-  tbl %>% select(o_cat, p_cat1, estimate, estimate_low, estimate_upp) %>%
-  mutate_if(is.numeric, ~round(.x * 100, 1)) %>%
-  mutate(ci = paste0("[", estimate_low, "-", estimate_upp, "]")) %>%
-  select(-estimate_low, -estimate_upp) %>%
-  pivot_wider(names_from = p_cat1, values_from = c(estimate, ci), names_sep = "__") %>%
-  mutate_if(is.numeric, as.character) %>%
-  pivot_longer(cols = -o_cat, names_to = c("Statistic", "heading"), names_sep = "__") %>%
-  pivot_wider(names_from = heading, values_from = value) %>%
-  select(-Statistic) %>%
-  add_row() %>%
-  add_row(.before = 1) %>%
-  add_row(.before = 1) %>%
-  mutate(
-    across(-1, ~case_when(row_number() == 1 ~ "%", TRUE ~ .x)),
-    across(1, ~case_when(row_number() == 2 ~ outcome_label, TRUE ~ .x))
-  )
-
-values
-
-bases <-
+organise_table <- function(data_table){
+  
+  predictor_label <- make_hux(table = data_table)
+  
+  outcome_label <- data_table %>% pull(o_lab) %>% unique
+  
+  values <-
+    data_table %>% 
+      select(o_cat, p_cat1, estimate, estimate_low, estimate_upp) %>%
+      mutate_if(is.numeric, ~round(.x * 100, 1)) %>%
+      mutate(ci = paste0("[", estimate_low, "-", estimate_upp, "]")) %>%
+      select(-estimate_low, -estimate_upp) %>%
+      pivot_wider(names_from = p_cat1, values_from = c(estimate, ci), names_sep = "__") %>%
+      mutate_if(is.numeric, as.character) %>%
+      pivot_longer(cols = -o_cat, names_to = c("Statistic", "heading"), names_sep = "__") %>%
+      pivot_wider(names_from = heading, values_from = value) %>%
+      select(-Statistic) %>%
+      add_row() %>%
+      add_row(.before = 1) %>%
+      add_row(.before = 1) %>%
+      mutate(
+        across(-1, ~case_when(row_number() == 1 ~ "%", TRUE ~ .x)),
+        across(1, ~case_when(row_number() == 2 ~ outcome_label, TRUE ~ .x))
+      )
+  
+  bases <-
   tbl %>%
   select(p_cat1, base) %>%
   unique() %>%
   pivot_wider(names_from = p_cat1, values_from = base, values_fn = paste0) %>%
   mutate(o_cat = "Unweighted base", .before = 1)
 
-bind_rows(values, bases) %>%
-  rename("Variables" = o_cat) %>%
-  as_hux() %>%
-  rbind(top_of_table, .) %>% as_flextable
+  bind_rows(values, bases) %>%
+    rename("Variables" = o_cat) %>%
+    as_hux() %>%
+    rbind(top_of_table, .) 
+
+}
+
+organise_table(tbl) %>% as_flextable
 
 ```
