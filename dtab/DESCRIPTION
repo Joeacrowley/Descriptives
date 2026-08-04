@@ -1,0 +1,39 @@
+Package: dtab
+Title: Descriptive and Crosstabulation Tables for Survey Data
+Version: 0.1.0
+Authors@R:
+    person("Joe", "Crowley", email = "joeac121@gmail.com", role = c("aut", "cre"))
+Description: Computes weighted and unweighted descriptive statistics
+    (means, medians, sums, percentages, counts) broken down by one or more
+    predictors, with optional confidence intervals, significance tests, and
+    pairwise (letter-based) significance testing against survey-weighted
+    designs via the 'survey' package. Reshapes the results into publication-
+    ready crosstabulation, summary, battery-grid, and numeric-summary tables
+    (via 'huxtable'), and exports them to Excel.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.1.0)
+Imports:
+    dplyr,
+    tidyr,
+    purrr,
+    stringr,
+    tibble,
+    forcats,
+    rlang,
+    huxtable,
+    srvyr,
+    survey,
+    haven,
+    labelled,
+    wrappedtools,
+    openxlsx,
+    stats,
+    utils
+Suggests:
+    testthat (>= 3.0.0),
+    flextable
+Config/testthat/edition: 3
