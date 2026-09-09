@@ -42,11 +42,8 @@ returned by \code{\link[=pivot_battery]{pivot_battery()}}.
 \description{
 Single entry point chaining \code{\link[=calc_stats]{calc_stats()}} straight to \code{\link[=pivot_battery]{pivot_battery()}}
 and \code{\link[=format_battery]{format_battery()}} - the battery-grid equivalent of \code{\link[=make_table]{make_table()}}'s
-one-call convenience, kept as a separate function rather than folded
-into \code{make_table()} for the same dispatch-collision reason as
-\code{\link[=make_numeric_summary_table]{make_numeric_summary_table()}} (see this file's header note:
-\code{predictors = NULL} already routes \code{make_table()} to a plain summary
-table, and a battery grid is also a no-predictors table).
+one-call convenience, kept separate for the same dispatch-collision
+reason as \code{\link[=make_numeric_summary_table]{make_numeric_summary_table()}} (see this file's header note).
 }
 \seealso{
 \code{\link[=pivot_battery]{pivot_battery()}}, \code{\link[=format_battery]{format_battery()}}

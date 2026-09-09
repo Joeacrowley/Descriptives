@@ -1,0 +1,273 @@
+---
+title: "Walkthrough calc_stats()"
+format:
+  html:
+    df-print: paged
+---
+
+Broadly, `calc_stats` is a wrapper that calculates statistics (e.g. mean/percentages) for each of a vector of outcomes passed to it, for each of a list of predictors passed to it. Predictors can be nested, e.g. mean and age. There is not a limit to how many predictors you can nest. `calc_stats` figures out which statistics are requested, and passed each outcome in turn to a series of internal helper function that calculate one particular statistics for all the predictors requested. This returns a data frame for each outcome which is then bound together. 
+
+## Set up
+
+```{r setup, collapse=T, message=F, warning=F}
+devtools::load_all("dtab")
+library(tidyverse)
+library(srvyr)
+
+df2    <- readRDS(here::here("data", "synthetic_bsa_clean.rds"))
+df_svy <- df2 %>% as_survey_design(weight = WtFactor)
+```
+
+<br>
+
+## Individual statistic functions
+
+- `mean` — `unweighted_mean`
+- `median` — `unweighted_median`
+- `sum` — `unweighted_sum`
+- `perc` — `unweighted_perc`
+- `count` — `unweighted_count`
+- `min` — `unweighted_min`
+- `max` — `unweighted_max`
+- `range` — `unweighted_range`
+- `iqr` — `unweighted_iqr`
+- `sd` — `unweighted_sd`
+- `w_mean` — `weighted_mean`
+- `w_median` — `weighted_median`
+- `w_sum` — `weighted_sum`
+- `w_perc` — `weighted_perc`
+- `w_count` — `weighted_count`
+- `w_iqr` — `weighted_iqr`
+- `w_sd` — `weighted_sd`
+
+This is the code that sits behind calc_stats and actually calculates statistics. There is one function per statistic (mean, median, sum, perc, count, min, max, range, iqr, sd), each in weighted and unweighted flavours where that distinction makes sense.
+
+Each individual statistic function is passed the full list of predictors and a single outcome, and returns that outcome's statistic broken down by each predictor set, plus an overall Total row. When called via calc_stats(), it's never handed more than one outcome at a time — the set of statistics that make sense differs by outcome type (numeric vs categorical), so calc_stats() works out which statistics apply before dispatching, one outcome per call, to the right individual functions.
+
+Each one is a thin, near-identical shell:
+
+* it names its own stat label (e.g. "w_mean"),
+
+* says whether the outcome's categories should be part of the grouping (group_on_outcome — TRUE for perc/count, FALSE for mean/median/sum and the numeric-only stats),
+
+* and supplies a `compute closure` - where the statistic itself is calculated, e.g. applying survey_mean().
+
+They also ALL wrap a shared function — `calc_stat_engine()` which groups data, filters missing cases, and calls the `compute closure` on the grouped dataset. It then shapes and renames the result into the package's standardised long-format columns afterward.
+
+```{r}
+weighted_mean(df_svy, outcomes = "libauth", predictors = list("RSex"), conf = "se") %>% rmarkdown::paged_table()
+```
+
+<br>
+
+## `calc_stat_engine`
+
+`calc_stat_engine()` is shared by every stat function (weighted_mean, etc) - it groups and filters the data, and then uses that stat function's compute closure to calculate a statistic.
+
+The compute closure is probably the trickiest bit, there is a simple example of this below. 
+
+Note: `filtered` appears to be a redundant argument here but is used in other functions (e.g. unweighted_median).
+
+```{r}
+
+# These are, broadly, the steps that would be handled by the weighted_mean wrapper
+#  - Drop missing values and group by RSex
+#  - But don't group by outcome as we are calculating the mean...
+filtered <- df_svy %>%
+  filter(!is.na(RSex) & !is.na(libauth))
+
+grouped <- filtered %>%
+  group_by(RSex)
+
+# This is then passed to the compute function...
+compute <- function(grouped, filtered, outcome, predictor, conf) {
+  grouped %>%
+    summarise(estimate = survey_mean(!!sym(outcome), vartype = conf),
+              base = unweighted(n()))
+}
+
+compute(grouped = grouped, filtered = filtered,
+        outcome = "libauth", predictor = "RSex", conf = "se") %>%
+  rmarkdown::paged_table()
+
+```
+
+<br>
+
+This is the call that weighted_mean would then have passed to calc_stat_engine, for weighted_mean(), that combines the steps above.
+
+Once the outcome × predictor-set has been run:
+
+* it stamps outcome_type as "categorical" or "numeric",
+* standardises the names in the outputs so they can be stacked with others,
+* selects/orders the columns into a standard long-format shape,
+* and applies `conf` a small helper function to format the SE/CI rows, or drop them if conf = NULL.
+
+Although there appears to be nothing defining `grouped` and `filtered` here, these are defined internally within `calc_stat_engine` and passed to the compute closure.
+
+```{r}
+calc_stat_engine(
+  data       = df_svy,
+  outcomes   = "libauth",
+  predictors = list("RSex"),
+  conf       = "se",
+  stat_label = "w_mean",
+  group_on_outcome = FALSE,
+  compute = function(grouped, filtered, outcome, predictor, conf) {
+    grouped %>%
+      summarise(estimate = survey_mean(!!sym(outcome), vartype = conf),
+                base = unweighted(n()))
+  }
+) %>% glimpse
+```
+
+<br>
+
+### Empty predictor and outcome levels
+
+For `perc`/`count` (`group_on_outcome = TRUE`), `calc_stat_engine()` groups by predictor *and* outcome together with `.drop = FALSE`, so an outcome category with zero observations still comes back as a real row, at 0% - not silently absent. `dplyr::group_by()` only drops unused factor levels by default; forcing `.drop = FALSE` restores them.
+
+The predictor's unused levels are dropped first (`fct_drop()`), on purpose, so this doesn't also manufacture a row for a predictor level with no respondents at all - that would divide out to `NaN` (unweighted) or hit a hard error inside `survey_prop()` on the weighted path, since there's no real base to compute a percentage from. A wholly-empty predictor level stays exactly as absent as it always was; only a wholly-empty *outcome* level, within a predictor level that has real data, gets restored.
+
+```{r}
+set.seed(1)
+d <- tibble(
+  region  = factor(c(rep("North", 10), rep("South", 10)), levels = c("North", "South", "East")),
+  approve = factor(sample(c("Yes", "No"), 20, replace = TRUE), levels = c("Yes", "No", "Maybe"))
+)
+calc_stats(d, outcomes = "approve", predictors = "region", statistics = "perc", multicode = FALSE) %>%
+  select(cross_break, p_cat1, o_cat, estimate, base) %>%
+  rmarkdown::paged_table()
+```
+
+"Maybe" (never picked by anyone) is present at 0% for both North and South; "East" (nobody in it at all) doesn't appear as a predictor level anywhere. `mean`/`median`/`sum` (`group_on_outcome = FALSE`) aren't affected either way - there's no "outcome level" concept for a numeric outcome, and predictor-only grouping keeps its original `.drop = TRUE` behaviour.
+
+<br>
+
+### standardise_names()
+
+`Standardise_names` is quite an important helper within calc_stat_engine. It takes the output with the newly calculated statistics and gives it standardised names:
+
+* o_cat = outcome categories.
+* o_lab = outcome variable label.
+* outcome = outcome variable name.
+* p_cat1 = predictor categories.
+* p_lab1 = predictor variable label.
+* predictor1 = predictor variable name.
+
+The predictor name numbers just increase as more predictors are added.
+
+```{r}
+
+tbl <- df_svy %>%
+  filter(rowSums(across(c(RSex, libauth), is.na)) == 0) %>%
+  group_by(RSex) %>%
+  summarise(estimate = survey_mean(libauth, vartype = "se"),
+            base = unweighted(n())) %>%
+  mutate(libauth = "w_mean", base_description = NA)
+
+tbl %>% glimpse
+```
+
+`standardise_names` below has looked in `df_svy` for variable labels and here left `o_cat` as "w_mean" because the outcome variable is numeric, so it doesn't have categories.
+
+```{r}
+tbl %>%
+  standardise_names(out_var = "libauth", preds = "RSex", data = df_svy) %>%
+  glimpse()
+```
+
+<br>
+
+## `calc_stats()`
+
+`calc_stats()` is the outer wrapper - the function you'd actually call directly (or that the `pivot_*()`/`make_*()` functions call for you). It doesn't calculate anything itself; it validates and orchestrates:  
+
+* Checks the outcome/predictor variables exist, checks outcomes are not also predictors, and that predictors are factors,  
+* Splits `data` into an unweighted/weighted pair if it's a survey design object,  
+* For each outcome, of the requested `statistics` it applies only the relevant ones (e.g. mean for numerics, percentage for categorical). 
+* It loops over each outcome one a time, passing them to the required statistic functions, which then calculate the results for that set of predictors. 
+
+Here two rows come back - `mean` and `w_mean`. `calc_stats()` looped over both entries in `statistics` and stacked the results into this one tibble.
+
+```{r}
+calc_stats(
+  df_svy,
+  outcomes   = "libauth",
+  predictors = list("RSex"),
+  statistics = c("mean", "w_mean"),
+  conf       = "se"
+) %>%
+  rmarkdown::paged_table()
+```
+
+<br>
+
+It picks from the list of individual statistic functions from `stat_registry`, which is simply a named list containing the functions. 
+
+The names are that arguments for `statistics` that `calc_stats` accepts.
+
+```{r}
+
+stat_registry <- list(
+  mean     = unweighted_mean,  median   = unweighted_median,
+  sum      = unweighted_sum,   perc     = unweighted_perc,
+  count    = unweighted_count,
+  min      = unweighted_min,   max      = unweighted_max,
+  range    = unweighted_range, iqr      = unweighted_iqr,
+  sd       = unweighted_sd,
+  w_mean   = weighted_mean,    w_median = weighted_median,
+  w_sum    = weighted_sum,     w_perc   = weighted_perc,
+  w_count  = weighted_count,
+  w_iqr    = weighted_iqr,     w_sd     = weighted_sd
+)
+
+```
+
+The contents of stat_registry are the actual functions themselves. 
+
+```{r}
+stat_registry$mean
+```
+
+These are applied in turn by assigning each function that is needed to the same name `fn` using the following code from within calc_stats. I find this highly counter intuitive but it is in fact fairly straightforward.
+
+```{r, eval=F}
+
+for (stat in intersect(statistic, names(stat_registry))) {
+  is_weighted <- str_starts(stat, "w_")
+  if (is_weighted && is.null(weighted_data)) next
+
+  fn <- stat_registry[[stat]]
+
+  results <- append(results, list(fn(
+    data       = if (is_weighted) weighted_data else unweighted_data,
+    outcomes   = cur_outcome,
+    predictors = predictors,
+    conf       = conf,
+    base       = base
+  )))
+}
+
+```
+
+<br>
+
+Here we assign `fn` the same value as `unweighted_mean` and it just works in exactly the same way. 
+
+```{r}
+
+fn <- stat_registry[["mean"]]     
+fn(df2, outcomes = "libauth", predictors = list("RSex")) %>% glimpse
+
+```
+
+## Not covered:
+
+Optionally, `calc_stats` can also add p-values, (if `pairwise = TRUE`) pairwise significance letters, and combine the items from a single multicode question. It also has some base description handling - but this needs a re-write. 
+
+- p-values: `map_return_p_values()` → `return_pvalues()`
+- pairwise significance letters: `pwtest_over_all_combinations()` → `add_pairwise_sig()` - see *Pairwise testing in calc_stats* for the full walkthrough
+- multicode combination: `convert_multicodes()`
+- base description handling: `base_information()` → `create_bases()` → `prepare_base_for_table()`
+

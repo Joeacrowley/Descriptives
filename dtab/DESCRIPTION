@@ -31,6 +31,7 @@ Imports:
     labelled,
     wrappedtools,
     openxlsx,
+    broom,
     stats,
     utils
 Suggests:

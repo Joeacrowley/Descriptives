@@ -96,15 +96,16 @@ test_that("3. pivot_battery() rejects more than one statistic per call", {
 # item2: Agree, Agree, Agree, NA (same 3 declared levels, but Disagree/
 #   Neutral never actually occur, and the NA drops out of item2's own
 #   complete-case base) -> Agree = 3/3 = 100%, Base = 3. Disagree/Neutral
-#   never appear as rows for item2 at all (dplyr::group_by() drops unused
-#   factor levels by default) - after pivot_wider() these come back as real
-#   NAs, not zeros, which is the intended, documented behaviour, not a bug.
+#   still appear as real rows for item2, at 0% each - calc_stat_engine()'s
+#   group_by(.drop = FALSE) on the outcome axis restores a declared level
+#   with zero observations as a genuine 0, not an absent row, since the
+#   group's own total is known regardless of which categories were picked.
 #
 # Column order: Disagree, Neutral, Agree - item1's own factor level order,
 # since item1 contributes all three categories to the first-appearance scan
 # and item2 only ever adds one that's already present.
 
-test_that("4. pivot_battery() matches hand-calculated percentages, with a missing category rendering as NA, not an error", {
+test_that("4. pivot_battery() matches hand-calculated percentages, with a missing category rendering as 0, not an error", {
   data <- tibble(
     item1 = factor(c("Agree", "Agree", "Neutral", "Disagree"),
                     levels = c("Disagree", "Neutral", "Agree")),
@@ -126,14 +127,14 @@ test_that("4. pivot_battery() matches hand-calculated percentages, with a missin
   expect_equal(item1_row$Agree, 0.5)
   expect_equal(item1_row$Base, 4)
 
-  expect_true(is.na(item2_row$Disagree))
-  expect_true(is.na(item2_row$Neutral))
+  expect_equal(item2_row$Disagree, 0)
+  expect_equal(item2_row$Neutral, 0)
   expect_equal(item2_row$Agree, 1)
   expect_equal(item2_row$Base, 3)
 })
 
 
-test_that("5. format_battery() formats percentages as bare whole numbers, missing categories as \"-\", aligns Variable left / categories right, and adds a centered, blank-header \"%\" unit column right after Variable", {
+test_that("5. format_battery() formats percentages as bare whole numbers, a zero-response category as \"0\", aligns Variable left / categories right, and adds a centered, blank-header \"%\" unit column right after Variable", {
   data <- tibble(
     item1 = factor(c("Agree", "Agree", "Neutral", "Disagree"),
                     levels = c("Disagree", "Neutral", "Agree")),
@@ -154,26 +155,16 @@ test_that("5. format_battery() formats percentages as bare whole numbers, missin
   expect_equal(result[["Agree"]][2], "50")
   expect_equal(result[["Base"]][2], "4")
 
-  # set_na_string() is a DISPLAY instruction, not a data mutation - the
-  # underlying cell stays real NA regardless of what na_string is set to
-  # (same "stored vs displayed" split huxtable's rowspan/merge behaviour
-  # already caught elsewhere in this project - see pivot_summary.R's note on
-  # set_rowspan()). Plain `result[["Disagree"]][3]` therefore still reads
-  # NA, not "-": confirmed by an actual test run, not assumed. Checked two
-  # ways instead - the cell really is missing, AND na_string() was actually
-  # told to render it as "-" - rather than asserting on `[[` output that
-  # huxtable was never going to change.
-  expect_true(is.na(result[["Disagree"]][3]))
-  expect_true(is.na(result[["Neutral"]][3]))
+  # item2's Disagree/Neutral are a genuine 0, not a missing cell - restored
+  # by calc_stat_engine()'s group_by(.drop = FALSE) on the outcome axis, and
+  # formatted the same bare-whole-number way as any other percentage.
+  expect_equal(result[["Disagree"]][3], "0")
+  expect_equal(result[["Neutral"]][3], "0")
   expect_equal(result[["Agree"]][3], "100")
   expect_equal(result[["Base"]][3], "3")
 
   variable_col  <- 1
-  disagree_col  <- which(names(result) == "Disagree")
-  neutral_col   <- which(names(result) == "Neutral")
   agree_col     <- which(names(result) == "Agree")
-  expect_equal(huxtable::na_string(result)[3, disagree_col], "-")
-  expect_equal(huxtable::na_string(result)[3, neutral_col], "-")
 
   expect_equal(huxtable::align(result)[2, variable_col], "left")
   expect_equal(huxtable::align(result)[2, agree_col], "right")
@@ -233,13 +224,12 @@ test_that("6. pivot_battery()/format_battery() on a larger, realistic-looking 4-
   print(huxtable::as_flextable(result))
 
   expect_equal(nrow(raw), 4)
-  # All 5 columns should appear given ~96 draws total across 4 items at
-  # probabilities that are never 0 for any level - not asserted as a strict
-  # equality against likert_levels, though, since that would make this test
-  # fragile to the (unlikely but real) chance that one level happens to get
-  # zero observations across every single item, which would legitimately
-  # (and correctly) mean that column doesn't exist at all - see
-  # pivot_battery()'s header note on why a missing category isn't an error.
+  # All 5 columns always appear, since every item shares the same declared
+  # likert_levels - calc_stat_engine()'s group_by(.drop = FALSE) on the
+  # outcome axis restores any level with zero observations as a real 0
+  # rather than dropping the column, so this isn't dependent on the actual
+  # draw (e.g. "recommend" happens to get zero "Disagree" responses here,
+  # and that column is still present, at 0).
   expect_true(all(likert_levels %in% names(raw)))
   expect_true(all(c("Variable", "Base") %in% names(raw)))
   expect_equal(raw$Variable, c(
@@ -268,18 +258,13 @@ test_that("6. pivot_battery()/format_battery() on a larger, realistic-looking 4-
     formatted_row <- result[result[[1]] == label, ]
 
     for (lvl in likert_levels) {
-      if (expected_props[[lvl]] == 0) {
-        # A category with zero respondents never gets a row at all
-        # (dplyr::group_by() drops unused factor levels by default - see
-        # pivot_battery()'s header note) - real NA, not a formatted "0".
-        expect_true(is.na(row[[lvl]]))
-      } else {
-        expect_equal(row[[lvl]], expected_props[[lvl]], tolerance = 1e-9)
-        # Routed through format_statistic() itself, same as format_battery()
-        # does internally - not a second, hand-rolled rounding rule that
-        # could disagree with sprintf("%.0f", ...) on an awkward fraction.
-        expect_equal(formatted_row[[lvl]], format_statistic(expected_props[[lvl]], "perc"))
-      }
+      # A zero-respondent category (e.g. "recommend"'s "Disagree") is a real
+      # 0, not a missing row - no special case needed, same check either way.
+      expect_equal(row[[lvl]], expected_props[[lvl]], tolerance = 1e-9)
+      # Routed through format_statistic() itself, same as format_battery()
+      # does internally - not a second, hand-rolled rounding rule that
+      # could disagree with sprintf("%.0f", ...) on an awkward fraction.
+      expect_equal(formatted_row[[lvl]], format_statistic(expected_props[[lvl]], "perc"))
     }
     expect_equal(row$Base, length(observed))
   }

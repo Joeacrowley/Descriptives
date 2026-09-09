@@ -14,7 +14,9 @@ calc_stats(
   base = NULL,
   pval = NULL,
   multicode = TRUE,
-  pairwise = FALSE
+  pairwise = FALSE,
+  pw_outcome_levels = NULL,
+  pw_crit_lev = 0.05
 )
 }
 \arguments{
@@ -48,9 +50,20 @@ binary/dummy columns sharing a common stem is treated as a single
 multicoded (select-all-that-apply) variable rather than several
 independent ones.}
 
-\item{pairwise}{If \code{TRUE}, runs \code{\link[=add_pairwise_sig]{add_pairwise_sig()}} internally and
-adds \code{sig_letter}/\code{sig_diff} columns (only for predictor levels, and
-only for statistics in \code{pairwise_eligible_stats}).}
+\item{pairwise}{If \code{TRUE}, adds \code{sig_letter}/\code{sig_diff} columns from
+pairwise significance testing between predictor levels (one t-test/
+\code{svyttest()} per pair, Holm-adjusted within each comparison set,
+BH-adjusted again across the full set before flagging significance).
+Only the outcome's preferred statistic is tested (weighted over
+unweighted, mean/perc over their \code{w_}-prefixed equivalents where both
+are available), and only flat or single-level-nested predictor sets.}
+
+\item{pw_outcome_levels}{Optional named list restricting which outcome
+categories get pairwise-tested (names are outcome variable names,
+values are the categories to test) - only used when \code{pairwise = TRUE}.}
+
+\item{pw_crit_lev}{Significance threshold for \code{sig_diff} flagging when
+\code{pairwise = TRUE}. Default \code{0.05}.}
 }
 \value{
 A long-format tibble with one row per (outcome, category,
@@ -60,11 +73,11 @@ predictor level, statistic): \code{outcome}/\code{o_lab} (variable name/label),
 \code{p_cat2}/\code{p_lab2}/\code{predictor2} when a nested predictor set was used),
 \code{stat} (the statistic code), \code{estimate} (and \code{estimate_se}/
 \code{estimate_ci_low}/\code{estimate_ci_high} if \code{conf} was requested), \code{base}
-(and \code{base_description}), plus \code{p_value}/\code{sig_letter}/\code{sig_diff} when
-requested. Feed this straight into \code{\link[=pivot_summary]{pivot_summary()}},
-\code{\link[=pivot_crosstab]{pivot_crosstab()}}, \code{\link[=pivot_nested_crosstab]{pivot_nested_crosstab()}}, \code{\link[=pivot_battery]{pivot_battery()}}, or
-\code{\link[=add_pairwise_sig]{add_pairwise_sig()}} - or use one of the \verb{make_*()} wrappers to skip
-calling \code{calc_stats()} directly.
+(and \code{base_description}), plus \code{p_value} when requested and
+\code{sig_letter}/\code{sig_diff} when \code{pairwise = TRUE}. Feed this
+straight into \code{\link[=pivot_summary]{pivot_summary()}}, \code{\link[=pivot_crosstab]{pivot_crosstab()}},
+\code{\link[=pivot_nested_crosstab]{pivot_nested_crosstab()}}, \code{\link[=pivot_battery]{pivot_battery()}} - or use one of the
+\verb{make_*()} wrappers to skip calling \code{calc_stats()} directly.
 }
 \description{
 The engine every \verb{pivot_*()}/\verb{make_*()} function in this package builds
@@ -73,10 +86,9 @@ level, statistic) combination, computed either on a plain data frame
 (unweighted) or a survey design object (weighted statistics and
 design-based SEs/CIs available). Handles categorical, multicoded, and
 numeric outcomes; flat, nested, or multiple side-by-side predictor
-sets; optional SE/CI, p-values, and letter-based pairwise significance
-testing.
+sets; optional SE/CI and p-values.
 }
 \seealso{
-\code{\link[=add_pairwise_sig]{add_pairwise_sig()}}, \code{\link[=pivot_summary]{pivot_summary()}}, \code{\link[=pivot_crosstab]{pivot_crosstab()}},
+\code{\link[=pivot_summary]{pivot_summary()}}, \code{\link[=pivot_crosstab]{pivot_crosstab()}},
 \code{\link[=pivot_nested_crosstab]{pivot_nested_crosstab()}}, \code{\link[=pivot_battery]{pivot_battery()}}, \code{\link[=make_table]{make_table()}}
 }

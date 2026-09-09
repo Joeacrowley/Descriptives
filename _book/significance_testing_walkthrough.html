@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.27">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>4&nbsp; Walkthrough calc_stats() significance testing – Descriptive analysis in R</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./pairwise testing in calc_stats.html" rel="next">
+<link href="./calc_stats_walkthrough.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-27c261d06b905028a18691de25d09dde.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<link href="site_libs/pagedtable-1.1/css/pagedtable.css" rel="stylesheet">
+<script src="site_libs/pagedtable-1.1/js/pagedtable.js"></script>
+
+
+<link rel="stylesheet" href="dense-notes.css">
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./significance_testing_walkthrough.html"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Walkthrough calc_stats() significance testing</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-full">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Descriptive analysis in R</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Descriptives in R</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./Overview.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Overview</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./calc_stats_walkthrough.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Walkthrough calc_stats()</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./significance_testing_walkthrough.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Walkthrough calc_stats() significance testing</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./pairwise testing in calc_stats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">pairwise tests</span></span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#set-up" id="toc-set-up" class="nav-link active" data-scroll-target="#set-up"><span class="header-section-number">4.1</span> Set up</a></li>
+  <li><a href="#the-individual-test-functions" id="toc-the-individual-test-functions" class="nav-link" data-scroll-target="#the-individual-test-functions"><span class="header-section-number">4.2</span> The individual test functions</a></li>
+  <li><a href="#run_assoc_test" id="toc-run_assoc_test" class="nav-link" data-scroll-target="#run_assoc_test"><span class="header-section-number">4.3</span> <code>run_assoc_test()</code></a></li>
+  <li><a href="#automatcally-select-test" id="toc-automatcally-select-test" class="nav-link" data-scroll-target="#automatcally-select-test"><span class="header-section-number">4.4</span> Automatcally select test</a></li>
+  <li><a href="#map-over-outcome-predictor-sets." id="toc-map-over-outcome-predictor-sets." class="nav-link" data-scroll-target="#map-over-outcome-predictor-sets."><span class="header-section-number">4.5</span> Map over outcome-predictor sets.</a></li>
+  <li><a href="#nested-tests" id="toc-nested-tests" class="nav-link" data-scroll-target="#nested-tests"><span class="header-section-number">4.6</span> Nested tests</a></li>
+  <li><a href="#applying-inside-calc_stats" id="toc-applying-inside-calc_stats" class="nav-link" data-scroll-target="#applying-inside-calc_stats"><span class="header-section-number">4.7</span> Applying inside calc_stats</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content column-body" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Walkthrough calc_stats() significance testing</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta column-body">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="set-up" class="level2" data-number="4.1">
+<h2 data-number="4.1" class="anchored" data-anchor-id="set-up"><span class="header-section-number">4.1</span> Set up</h2>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">load_all</span>(<span class="st">"dtab"</span>)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(srvyr)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(labelled)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>df2    <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(here<span class="sc">::</span><span class="fu">here</span>(<span class="st">"data"</span>, <span class="st">"synthetic_bsa_clean.rds"</span>))</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>df_svy <span class="ot">&lt;-</span> df2 <span class="sc">%&gt;%</span> <span class="fu">as_survey_design</span>(<span class="at">weight =</span> WtFactor)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>This describes how <code>calc_stats</code> adds significance testing.</p>
+<p>The output after it is run is to two new columns attached to the data frame output:</p>
+<ul>
+<li>p_method - the type of test run,<br>
+</li>
+<li>p_value - the p-value for that predictor-outcome pair.</li>
+</ul>
+<p>Run outside <code>calc_stats</code> it generates a data frame output with the same column structure as calc_stats, so they just merge back on to the main data frame.</p>
+<p><br></p>
+</section>
+<section id="the-individual-test-functions" class="level2" data-number="4.2">
+<h2 data-number="4.2" class="anchored" data-anchor-id="the-individual-test-functions"><span class="header-section-number">4.2</span> The individual test functions</h2>
+<p>Same pattern as the stat functions: one function per weighted/outcome-type combination, each a thin shell wrapping a shared engine.</p>
+<ul>
+<li><code>unweighted.factor</code> — <code>unweighted_test_cat_by_cat()</code> (Chi-Square)</li>
+<li><code>unweighted.numeric</code> — <code>unweighted_test_numeric_by_cat()</code> (Welch’s ANOVA, or Kruskal-Wallis if <code>shapiro.test()</code> on the residuals flags non-normality)</li>
+<li><code>weighted.factor</code> — <code>weighted_test_cat_by_cat()</code> (<code>survey::svychisq()</code>, adjWald)</li>
+<li><code>weighted.numeric</code> — <code>weighted_test_numeric_by_cat()</code> (Wald test via <code>survey::regTermTest()</code> on a <code>svyglm()</code>, or <code>survey::svyranktest()</code> if non-normal)</li>
+</ul>
+<p>Each one supplies <code>run_assoc_test()</code> with <code>weighted</code> (TRUE/FALSE), <code>stat_labels</code> (which stat codes this test’s p-value should be attached to - e.g.&nbsp;<code>c("mean", "median", "sum", "min", "max", "range", "iqr", "sd")</code> for the unweighted numeric case), and a <code>test</code> closure that actually runs the test and returns <code>list(method, p)</code>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">unweighted_test_numeric_by_cat</span>(df2, <span class="at">outcome =</span> <span class="st">"libauth"</span>, <span class="at">predictor =</span> <span class="st">"RSex"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  rmarkdown<span class="sc">::</span><span class="fu">paged_table</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div data-pagedtable="false">
+  <script data-pagedtable-source="" type="application/json">
+{"columns":[{"label":["cross_break"],"name":[1],"type":["chr"],"align":["left"]},{"label":["predictor1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["p_lab1"],"name":[3],"type":["chr"],"align":["left"]},{"label":["outcome"],"name":[4],"type":["chr"],"align":["left"]},{"label":["o_lab"],"name":[5],"type":["chr"],"align":["left"]},{"label":["p_method"],"name":[6],"type":["chr"],"align":["left"]},{"label":["p_value"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["stat"],"name":[8],"type":["chr"],"align":["left"]}],"data":[{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"mean"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"median"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"sum"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"min"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"max"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"range"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"iqr"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"sd"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">weighted_test_cat_by_cat</span>(df_svy, <span class="at">outcome =</span> <span class="st">"skipmeal"</span>, <span class="at">predictor =</span> <span class="st">"RSex"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  rmarkdown<span class="sc">::</span><span class="fu">paged_table</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div data-pagedtable="false">
+  <script data-pagedtable-source="" type="application/json">
+{"columns":[{"label":["cross_break"],"name":[1],"type":["chr"],"align":["left"]},{"label":["predictor1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["p_lab1"],"name":[3],"type":["chr"],"align":["left"]},{"label":["outcome"],"name":[4],"type":["chr"],"align":["left"]},{"label":["o_lab"],"name":[5],"type":["chr"],"align":["left"]},{"label":["p_method"],"name":[6],"type":["chr"],"align":["left"]},{"label":["p_value"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["stat"],"name":[8],"type":["chr"],"align":["left"]}],"data":[{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"skipmeal","5":"How often do you or other members of your household skip a meal because there is not enough money for food?: SC B, C","6":"Chi-Square test","7":"0.7974487","8":"w_perc"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"skipmeal","5":"How often do you or other members of your household skip a meal because there is not enough money for food?: SC B, C","6":"Chi-Square test","7":"0.7974487","8":"w_count"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
+<p><br></p>
+</section>
+<section id="run_assoc_test" class="level2" data-number="4.3">
+<h2 data-number="4.3" class="anchored" data-anchor-id="run_assoc_test"><span class="header-section-number">4.3</span> <code>run_assoc_test()</code></h2>
+<p>The shared engine every test function above wraps - directly analogous to <code>calc_stat_engine()</code> for the stat functions.</p>
+<p>It builds the variable labels, runs the <code>test</code> closure (wrapped in <code>tryCatch()</code>, so a test failure becomes <code>NA</code> rather than crashing <code>calc_stats()</code>), assembles one result row, then fans that single row out - via <code>map_df(stat_labels, ...)</code> - into one copy per stat code in <code>stat_labels</code>.</p>
+<p>That fan-out matters because a p-value belongs to the (outcome, predictor) <em>pair</em>, not to any one statistic, but it still needs to be joinable against <code>calc_stats()</code>’s output later, which has one row per (outcome, stat, predictor level) - hence one identical p-value row per relevant stat.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># It first pulls out the predictor and outcome variables...</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>outcome   <span class="ot">&lt;-</span> <span class="st">"libauth"</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>predictor <span class="ot">&lt;-</span> <span class="st">"RSex"</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co"># It has an agument called `test`, which is what actually differs for the four wrappers around it</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co"># This is the test for `unweighted_test_numeric_by_cat`.</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>test_result <span class="ot">&lt;-</span> <span class="fu">tryCatch</span>(</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  {</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    x <span class="ot">&lt;-</span> df2 <span class="sc">%&gt;%</span> <span class="fu">pull</span>(predictor); y <span class="ot">&lt;-</span> df2 <span class="sc">%&gt;%</span> <span class="fu">pull</span>(outcome)</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    keep <span class="ot">&lt;-</span> <span class="fu">complete.cases</span>(y, x); y <span class="ot">&lt;-</span> y[keep]; x <span class="ot">&lt;-</span> x[keep]</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    model <span class="ot">&lt;-</span> <span class="fu">lm</span>(y <span class="sc">~</span> x)</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">shapiro.test</span>(<span class="fu">residuals</span>(model))<span class="sc">$</span>p.value <span class="sc">&lt;</span> <span class="fl">0.05</span>) {</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>      <span class="fu">list</span>(<span class="at">method =</span> <span class="st">"Kruskal-Wallis"</span>, <span class="at">p =</span> <span class="fu">kruskal.test</span>(y <span class="sc">~</span> x)<span class="sc">$</span>p.value)</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    } <span class="cf">else</span> {</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>      <span class="fu">list</span>(<span class="at">method =</span> <span class="st">"Welch's ANOVA"</span>, <span class="at">p =</span> <span class="fu">oneway.test</span>(y <span class="sc">~</span> x, <span class="at">var.equal =</span> <span class="cn">FALSE</span>)<span class="sc">$</span>p.value)</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>  },</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">error =</span> <span class="cf">function</span>(e) <span class="fu">list</span>(<span class="at">method =</span> <span class="st">"Significance test returned an error."</span>, <span class="at">p =</span> <span class="cn">NA</span>)</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a><span class="co"># And the it assembles the results with standardised labels so they can match on to calc_stats dataframe.</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>output_tbl <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">cross_break =</span> predictor, <span class="at">predictor1 =</span> predictor,</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">p_lab1 =</span> df2 <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="fu">all_of</span>(predictor)) <span class="sc">%&gt;%</span> <span class="fu">var_label</span>(<span class="at">unlist =</span> <span class="cn">TRUE</span>, <span class="at">null_action =</span> <span class="st">"fill"</span>),</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">outcome =</span> outcome,</span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">o_lab =</span> df2 <span class="sc">%&gt;%</span> <span class="fu">select</span>(<span class="fu">all_of</span>(outcome)) <span class="sc">%&gt;%</span> <span class="fu">var_label</span>(<span class="at">unlist =</span> <span class="cn">TRUE</span>, <span class="at">null_action =</span> <span class="st">"fill"</span>),</span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">p_method =</span> test_result<span class="sc">$</span>method, <span class="at">p_value =</span> test_result<span class="sc">$</span>p</span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>output_tbl</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 1 × 7
+  cross_break predictor1 p_lab1            outcome o_lab        p_method p_value
+  &lt;chr&gt;       &lt;chr&gt;      &lt;chr&gt;             &lt;chr&gt;   &lt;chr&gt;        &lt;chr&gt;      &lt;dbl&gt;
+1 RSex        RSex       Sex of respondent libauth Libertarian… Kruskal…   0.502</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># It then fans-out the result - one row per numeric stat code, same p-value repeated</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Again, so that it can map on to calc_stats data frame</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">map_df</span>(<span class="fu">c</span>(<span class="st">"mean"</span>, <span class="st">"median"</span>, <span class="st">"sum"</span>, <span class="st">"min"</span>, <span class="st">"max"</span>, <span class="st">"range"</span>, <span class="st">"iqr"</span>, <span class="st">"sd"</span>),</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>       <span class="sc">~</span> output_tbl <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">stat =</span> .x)) <span class="sc">%&gt;%</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  rmarkdown<span class="sc">::</span><span class="fu">paged_table</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div data-pagedtable="false">
+  <script data-pagedtable-source="" type="application/json">
+{"columns":[{"label":["cross_break"],"name":[1],"type":["chr"],"align":["left"]},{"label":["predictor1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["p_lab1"],"name":[3],"type":["chr"],"align":["left"]},{"label":["outcome"],"name":[4],"type":["chr"],"align":["left"]},{"label":["o_lab"],"name":[5],"type":["chr"],"align":["left"]},{"label":["p_method"],"name":[6],"type":["chr"],"align":["left"]},{"label":["p_value"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["stat"],"name":[8],"type":["chr"],"align":["left"]}],"data":[{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"mean"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"median"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"sum"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"min"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"max"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"range"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"iqr"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"sd"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
+<p><br></p>
+</section>
+<section id="automatcally-select-test" class="level2" data-number="4.4">
+<h2 data-number="4.4" class="anchored" data-anchor-id="automatcally-select-test"><span class="header-section-number">4.4</span> Automatcally select test</h2>
+<p>This is done by <code>return_pvalues()</code> and <code>test_registry</code>.</p>
+<p>This uses a named list as a lookup-by-key mechanism.</p>
+<p><code>return_pvalues()</code> works out whether <code>data</code> is a survey design and whether the outcome is a factor, pastes those two into a key (e.g.&nbsp;<code>"weighted.numeric"</code>), and looks that key up in <code>test_registry</code>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>test_registry <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="st">"unweighted.factor"</span>  <span class="ot">=</span> unweighted_test_cat_by_cat,</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="st">"unweighted.numeric"</span> <span class="ot">=</span> unweighted_test_numeric_by_cat,</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="st">"weighted.factor"</span>    <span class="ot">=</span> weighted_test_cat_by_cat,</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="st">"weighted.numeric"</span>   <span class="ot">=</span> weighted_test_numeric_by_cat</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><code>test_registry</code> contains the functions themselves, for application they can then be called and applied like this, which is what <code>return_pvalues</code> does.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>test_registry[[<span class="st">"unweighted.numeric"</span>]](df2, <span class="at">outcome =</span> <span class="st">"libauth"</span>, <span class="at">predictor =</span> <span class="st">"RSex"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  rmarkdown<span class="sc">::</span><span class="fu">paged_table</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div data-pagedtable="false">
+  <script data-pagedtable-source="" type="application/json">
+{"columns":[{"label":["cross_break"],"name":[1],"type":["chr"],"align":["left"]},{"label":["predictor1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["p_lab1"],"name":[3],"type":["chr"],"align":["left"]},{"label":["outcome"],"name":[4],"type":["chr"],"align":["left"]},{"label":["o_lab"],"name":[5],"type":["chr"],"align":["left"]},{"label":["p_method"],"name":[6],"type":["chr"],"align":["left"]},{"label":["p_value"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["stat"],"name":[8],"type":["chr"],"align":["left"]}],"data":[{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"mean"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"median"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"sum"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"min"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"max"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"range"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"iqr"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.5024658","8":"sd"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
+<p><code>return_pvalues()</code> then can automates selection of significance test based on the types of outcome it is fed.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">return_pvalues</span>(df_svy, <span class="at">outcome =</span> <span class="st">"libauth"</span>, <span class="at">predictor =</span> <span class="st">"RSex"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  rmarkdown<span class="sc">::</span><span class="fu">paged_table</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div data-pagedtable="false">
+  <script data-pagedtable-source="" type="application/json">
+{"columns":[{"label":["cross_break"],"name":[1],"type":["chr"],"align":["left"]},{"label":["predictor1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["p_lab1"],"name":[3],"type":["chr"],"align":["left"]},{"label":["outcome"],"name":[4],"type":["chr"],"align":["left"]},{"label":["o_lab"],"name":[5],"type":["chr"],"align":["left"]},{"label":["p_method"],"name":[6],"type":["chr"],"align":["left"]},{"label":["p_value"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["stat"],"name":[8],"type":["chr"],"align":["left"]}],"data":[{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.3830953","8":"w_mean"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.3830953","8":"w_median"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.3830953","8":"w_sum"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.3830953","8":"w_iqr"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.3830953","8":"w_sd"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">return_pvalues</span>(df2, <span class="at">outcome =</span> <span class="st">"skipmeal"</span>, <span class="at">predictor =</span> <span class="st">"RSex"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  rmarkdown<span class="sc">::</span><span class="fu">paged_table</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div data-pagedtable="false">
+  <script data-pagedtable-source="" type="application/json">
+{"columns":[{"label":["cross_break"],"name":[1],"type":["chr"],"align":["left"]},{"label":["predictor1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["p_lab1"],"name":[3],"type":["chr"],"align":["left"]},{"label":["outcome"],"name":[4],"type":["chr"],"align":["left"]},{"label":["o_lab"],"name":[5],"type":["chr"],"align":["left"]},{"label":["p_method"],"name":[6],"type":["chr"],"align":["left"]},{"label":["p_value"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["stat"],"name":[8],"type":["chr"],"align":["left"]}],"data":[{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"skipmeal","5":"How often do you or other members of your household skip a meal because there is not enough money for food?: SC B, C","6":"Chi-Square test","7":"0.7457593","8":"perc"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"skipmeal","5":"How often do you or other members of your household skip a meal because there is not enough money for food?: SC B, C","6":"Chi-Square test","7":"0.7457593","8":"count"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
+<p><br></p>
+</section>
+<section id="map-over-outcome-predictor-sets." class="level2" data-number="4.5">
+<h2 data-number="4.5" class="anchored" data-anchor-id="map-over-outcome-predictor-sets."><span class="header-section-number">4.5</span> Map over outcome-predictor sets.</h2>
+<p><code>map_return_p_values</code> loops <code>return_pvalues()</code> over every predictor × outcome combination requested, binding the results into one tibble:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>map_return_p_values <span class="ot">&lt;-</span> <span class="cf">function</span>(outcomes, predictors, data) {</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">map_df</span>(predictors, <span class="cf">function</span>(pred) {</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">map_df</span>(outcomes, <span class="cf">function</span>(out) {</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return_pvalues</span>(<span class="at">data =</span> data, <span class="at">outcome =</span> out, <span class="at">predictor =</span> pred)</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    })</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>  })</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a><span class="fu">map_return_p_values</span>(<span class="at">data =</span> df_svy, <span class="at">outcomes =</span> <span class="st">"libauth"</span>, <span class="at">predictors =</span> <span class="st">"RSex"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>  rmarkdown<span class="sc">::</span><span class="fu">paged_table</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div data-pagedtable="false">
+  <script data-pagedtable-source="" type="application/json">
+{"columns":[{"label":["cross_break"],"name":[1],"type":["chr"],"align":["left"]},{"label":["predictor1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["p_lab1"],"name":[3],"type":["chr"],"align":["left"]},{"label":["outcome"],"name":[4],"type":["chr"],"align":["left"]},{"label":["o_lab"],"name":[5],"type":["chr"],"align":["left"]},{"label":["p_method"],"name":[6],"type":["chr"],"align":["left"]},{"label":["p_value"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["stat"],"name":[8],"type":["chr"],"align":["left"]}],"data":[{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.3830953","8":"w_mean"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.3830953","8":"w_median"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.3830953","8":"w_sum"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.3830953","8":"w_iqr"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"0.3830953","8":"w_sd"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
+<p>Note <code>predictors</code> here is a plain character vector of single variable names, not the nested-list shape <code>calc_stats(predictors = ...)</code> takes - <code>calc_stats()</code> unpacks that itself first (<code>pvalue_preds &lt;- predictors[predictors %&gt;% map_lgl(~ length(.x) == 1)] %&gt;% unlist() %&gt;% unique()</code>), keeping only the flat (non-nested) predictor sets before calling this.</p>
+<p>A nested 2-variable predictor set (e.g.&nbsp;<code>list(c("RSex", "RAgeCat"))</code>) skips this function entirely and goes to <code>nested_pvalues()</code> instead, covered next.</p>
+<p><br></p>
+</section>
+<section id="nested-tests" class="level2" data-number="4.6">
+<h2 data-number="4.6" class="anchored" data-anchor-id="nested-tests"><span class="header-section-number">4.6</span> Nested tests</h2>
+<p>For a nested predictor set, one omnibus p-value across every cell doesn’t really answer a useful question. What <code>calc_stats()</code> actually wants, for e.g.&nbsp;<code>RSex</code> (outer) x <code>RAgeCat</code> (inner), is: within each sex, is age associated with the outcome? So it’s one p-value per outer level, not one for the whole table.</p>
+<p>It reuses <code>return_pvalues()</code> unchanged - same test-selection logic as above - just called once per outer level, against a filtered subset of the data for that level.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>outer_var <span class="ot">&lt;-</span> <span class="st">"RSex"</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>inner_var <span class="ot">&lt;-</span> <span class="st">"RAgeCat"</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>outcome   <span class="ot">&lt;-</span> <span class="st">"libauth"</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="co"># It first works out which levels the outer variable actually has...</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>plain_data   <span class="ot">&lt;-</span> df_svy[[<span class="st">"variables"</span>]]</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>outer_levels <span class="ot">&lt;-</span> plain_data <span class="sc">%&gt;%</span> <span class="fu">pull</span>(outer_var) <span class="sc">%&gt;%</span> <span class="fu">unique</span>() <span class="sc">%&gt;%</span> <span class="fu">na.omit</span>() <span class="sc">%&gt;%</span> <span class="fu">as.character</span>()</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>outer_levels</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "Female" "Male"  </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ...then, for each outer level in turn, filters down to just that subset and</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="co"># runs return_pvalues() as normal - testing the inner variable against the</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="co"># outcome, within that one level only.</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="fu">map_df</span>(outer_levels, <span class="cf">function</span>(lvl) {</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  subset_data <span class="ot">&lt;-</span> df_svy <span class="sc">%&gt;%</span> <span class="fu">filter</span>(.data[[outer_var]] <span class="sc">==</span> lvl)</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return_pvalues</span>(<span class="at">data =</span> subset_data, <span class="at">outcome =</span> outcome, <span class="at">predictor =</span> inner_var) <span class="sc">%&gt;%</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">cross_break =</span> <span class="fu">paste0</span>(outer_var, <span class="st">"_X_"</span>, inner_var), <span class="at">p_cat1 =</span> lvl)</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>  rmarkdown<span class="sc">::</span><span class="fu">paged_table</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div data-pagedtable="false">
+  <script data-pagedtable-source="" type="application/json">
+{"columns":[{"label":["cross_break"],"name":[1],"type":["chr"],"align":["left"]},{"label":["predictor1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["p_lab1"],"name":[3],"type":["chr"],"align":["left"]},{"label":["outcome"],"name":[4],"type":["chr"],"align":["left"]},{"label":["o_lab"],"name":[5],"type":["chr"],"align":["left"]},{"label":["p_method"],"name":[6],"type":["chr"],"align":["left"]},{"label":["p_value"],"name":[7],"type":["dbl[,1]"],"align":["right"]},{"label":["stat"],"name":[8],"type":["chr"],"align":["left"]},{"label":["p_cat1"],"name":[9],"type":["chr"],"align":["left"]}],"data":[{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"6.205593e-09","8":"w_mean","9":"Female"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"6.205593e-09","8":"w_median","9":"Female"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"6.205593e-09","8":"w_sum","9":"Female"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"6.205593e-09","8":"w_iqr","9":"Female"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"6.205593e-09","8":"w_sd","9":"Female"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"3.350678e-15","8":"w_mean","9":"Male"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"3.350678e-15","8":"w_median","9":"Male"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"3.350678e-15","8":"w_sum","9":"Male"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"3.350678e-15","8":"w_iqr","9":"Male"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"3.350678e-15","8":"w_sd","9":"Male"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
+<p>Which is exactly what <code>nested_pvalues()</code> itself does in one call:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">nested_pvalues</span>(df_svy, <span class="at">outcomes =</span> <span class="st">"libauth"</span>, <span class="at">outer_var =</span> <span class="st">"RSex"</span>, <span class="at">inner_var =</span> <span class="st">"RAgeCat"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  rmarkdown<span class="sc">::</span><span class="fu">paged_table</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div data-pagedtable="false">
+  <script data-pagedtable-source="" type="application/json">
+{"columns":[{"label":["cross_break"],"name":[1],"type":["chr"],"align":["left"]},{"label":["predictor1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["p_lab1"],"name":[3],"type":["chr"],"align":["left"]},{"label":["outcome"],"name":[4],"type":["chr"],"align":["left"]},{"label":["o_lab"],"name":[5],"type":["chr"],"align":["left"]},{"label":["p_method"],"name":[6],"type":["chr"],"align":["left"]},{"label":["p_value"],"name":[7],"type":["dbl[,1]"],"align":["right"]},{"label":["stat"],"name":[8],"type":["chr"],"align":["left"]},{"label":["p_cat1"],"name":[9],"type":["chr"],"align":["left"]}],"data":[{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"6.205593e-09","8":"w_mean","9":"Female"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"6.205593e-09","8":"w_median","9":"Female"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"6.205593e-09","8":"w_sum","9":"Female"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"6.205593e-09","8":"w_iqr","9":"Female"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"6.205593e-09","8":"w_sd","9":"Female"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"3.350678e-15","8":"w_mean","9":"Male"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"3.350678e-15","8":"w_median","9":"Male"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"3.350678e-15","8":"w_sum","9":"Male"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"3.350678e-15","8":"w_iqr","9":"Male"},{"1":"RSex_X_RAgeCat","2":"RAgeCat","3":"Age of respondent(grouped)<7 category> dv","4":"libauth","5":"Libertarian-authoritarian scale (TradVals to censor) dv","6":"Kruskal-Wallis","7":"3.350678e-15","8":"w_sd","9":"Male"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
+<p>Note it only ever takes a single (outer, inner) pair - <code>calc_stats()</code> loops over <code>nested_preds</code> itself (once per nested predictor set requested) before calling this, the same way it unpacks <code>pvalue_preds</code> before calling <code>map_return_p_values()</code>.</p>
+<p><br></p>
+</section>
+<section id="applying-inside-calc_stats" class="level2" data-number="4.7">
+<h2 data-number="4.7" class="anchored" data-anchor-id="applying-inside-calc_stats"><span class="header-section-number">4.7</span> Applying inside calc_stats</h2>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">calc_stats</span>(</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  df_svy,</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">outcomes   =</span> <span class="st">"libauth"</span>,</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">predictors =</span> <span class="fu">list</span>(<span class="st">"RSex"</span>),</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">statistics =</span> <span class="fu">c</span>(<span class="st">"mean"</span>, <span class="st">"w_mean"</span>),</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">conf       =</span> <span class="st">"se"</span>,</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">pval       =</span> <span class="cn">TRUE</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>  rmarkdown<span class="sc">::</span><span class="fu">paged_table</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div data-pagedtable="false">
+  <script data-pagedtable-source="" type="application/json">
+{"columns":[{"label":["cross_break"],"name":[1],"type":["chr"],"align":["left"]},{"label":["predictor1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["p_lab1"],"name":[3],"type":["chr"],"align":["left"]},{"label":["p_cat1"],"name":[4],"type":["chr"],"align":["left"]},{"label":["outcome"],"name":[5],"type":["chr"],"align":["left"]},{"label":["o_lab"],"name":[6],"type":["chr"],"align":["left"]},{"label":["o_cat"],"name":[7],"type":["chr"],"align":["left"]},{"label":["stat"],"name":[8],"type":["chr"],"align":["left"]},{"label":["outcome_type"],"name":[9],"type":["chr"],"align":["left"]},{"label":["estimate"],"name":[10],"type":["dbl"],"align":["right"]},{"label":["estimate_se"],"name":[11],"type":["dbl"],"align":["right"]},{"label":["base"],"name":[12],"type":["int"],"align":["right"]},{"label":["base_description"],"name":[13],"type":["lgl"],"align":["right"]},{"label":["unweighted_n"],"name":[14],"type":["int"],"align":["right"]},{"label":["p_method"],"name":[15],"type":["chr"],"align":["left"]},{"label":["p_value"],"name":[16],"type":["dbl"],"align":["right"]}],"data":[{"1":"Total","2":"Total","3":"Total","4":"Total","5":"libauth","6":"Libertarian-authoritarian scale (TradVals to censor) dv","7":"mean","8":"mean","9":"numeric","10":"3.534089","11":"0.01433904","12":"2602","13":"NA","14":"2602","15":"NA","16":"NA"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"Male","5":"libauth","6":"Libertarian-authoritarian scale (TradVals to censor) dv","7":"mean","8":"mean","9":"numeric","10":"3.545330","11":"0.02065241","12":"1217","13":"NA","14":"1217","15":"Kruskal-Wallis","16":"0.5024658"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"Female","5":"libauth","6":"Libertarian-authoritarian scale (TradVals to censor) dv","7":"mean","8":"mean","9":"numeric","10":"3.524212","11":"0.01991232","12":"1385","13":"NA","14":"1385","15":"Kruskal-Wallis","16":"0.5024658"},{"1":"Total","2":"Total","3":"Total","4":"Total","5":"libauth","6":"Libertarian-authoritarian scale (TradVals to censor) dv","7":"w_mean","8":"w_mean","9":"numeric","10":"3.487181","11":"0.01634180","12":"2602","13":"NA","14":"2602","15":"NA","16":"NA"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"Male","5":"libauth","6":"Libertarian-authoritarian scale (TradVals to censor) dv","7":"w_mean","8":"w_mean","9":"numeric","10":"3.502264","11":"0.02403121","12":"1217","13":"NA","14":"1217","15":"Kruskal-Wallis","16":"0.3830953"},{"1":"RSex","2":"RSex","3":"Sex of respondent","4":"Female","5":"libauth","6":"Libertarian-authoritarian scale (TradVals to censor) dv","7":"w_mean","8":"w_mean","9":"numeric","10":"3.472249","11":"0.02215668","12":"1385","13":"NA","14":"1385","15":"Kruskal-Wallis","16":"0.3830953"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
+<p><code>p_method</code>/<code>p_value</code> are now attached to every row - <code>calc_stats()</code> ran <code>map_return_p_values()</code> once against the unweighted data (for <code>mean</code>) and once against the weighted data (for <code>w_mean</code>), then <code>left_join()</code>’d both back onto <code>merged_tables</code>.</p>
+<p>Adding a nested predictor set alongside the flat one shows both mechanisms firing in the same call - the flat <code>RSex</code> rows get their p-value from <code>map_return_p_values()</code>, the nested <code>RSex_X_RAgeCat</code> rows get theirs from <code>nested_pvalues()</code>, and <code>coalesce()</code> merges the two onto one <code>p_value</code> column:</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">calc_stats</span>(</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  df_svy,</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">outcomes   =</span> <span class="st">"libauth"</span>,</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">predictors =</span> <span class="fu">list</span>(<span class="st">"RSex"</span>, <span class="fu">c</span>(<span class="st">"RSex"</span>, <span class="st">"RAgeCat"</span>)),</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">statistics =</span> <span class="fu">c</span>(<span class="st">"mean"</span>, <span class="st">"w_mean"</span>),</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">conf       =</span> <span class="st">"se"</span>,</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">pval       =</span> <span class="cn">TRUE</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>  rmarkdown<span class="sc">::</span><span class="fu">paged_table</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div data-pagedtable="false">
+  <script data-pagedtable-source="" type="application/json">
+{"columns":[{"label":["cross_break"],"name":[1],"type":["chr"],"align":["left"]},{"label":["predictor1"],"name":[2],"type":["chr"],"align":["left"]},{"label":["predictor2"],"name":[3],"type":["chr"],"align":["left"]},{"label":["p_lab1"],"name":[4],"type":["chr"],"align":["left"]},{"label":["p_lab2"],"name":[5],"type":["chr"],"align":["left"]},{"label":["p_cat1"],"name":[6],"type":["chr"],"align":["left"]},{"label":["p_cat2"],"name":[7],"type":["chr"],"align":["left"]},{"label":["outcome"],"name":[8],"type":["chr"],"align":["left"]},{"label":["o_lab"],"name":[9],"type":["chr"],"align":["left"]},{"label":["o_cat"],"name":[10],"type":["chr"],"align":["left"]},{"label":["stat"],"name":[11],"type":["chr"],"align":["left"]},{"label":["outcome_type"],"name":[12],"type":["chr"],"align":["left"]},{"label":["estimate"],"name":[13],"type":["dbl"],"align":["right"]},{"label":["estimate_se"],"name":[14],"type":["dbl"],"align":["right"]},{"label":["base"],"name":[15],"type":["int"],"align":["right"]},{"label":["base_description"],"name":[16],"type":["lgl"],"align":["right"]},{"label":["unweighted_n"],"name":[17],"type":["int"],"align":["right"]},{"label":["p_method"],"name":[18],"type":["chr"],"align":["left"]},{"label":["p_value"],"name":[19],"type":["dbl[,1]"],"align":["right"]}],"data":[{"1":"Total","2":"Total","3":"Total","4":"Total","5":"Total","6":"Total","7":"Total","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.534089","14":"0.01433904","15":"2602","16":"NA","17":"2602","18":"NA","19":"NA"},{"1":"RSex","2":"RSex","3":"Total","4":"Sex of respondent","5":"Total","6":"Male","7":"Total","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.545330","14":"0.02065241","15":"1217","16":"NA","17":"1217","18":"Kruskal-Wallis","19":"5.024658e-01"},{"1":"RSex","2":"RSex","3":"Total","4":"Sex of respondent","5":"Total","6":"Female","7":"Total","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.524212","14":"0.01991232","15":"1385","16":"NA","17":"1385","18":"Kruskal-Wallis","19":"5.024658e-01"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"18-24","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.468254","14":"0.10772207","15":"63","16":"NA","17":"63","18":"Kruskal-Wallis","19":"7.218156e-10"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"25-34","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.231579","14":"0.05957291","15":"152","16":"NA","17":"152","18":"Kruskal-Wallis","19":"7.218156e-10"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"35-44","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.419540","14":"0.05079405","15":"203","16":"NA","17":"203","18":"Kruskal-Wallis","19":"7.218156e-10"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"45-54","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.551155","14":"0.05018295","15":"202","16":"NA","17":"202","18":"Kruskal-Wallis","19":"7.218156e-10"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"55-59","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.643056","14":"0.06266267","15":"120","16":"NA","17":"120","18":"Kruskal-Wallis","19":"7.218156e-10"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"60-64","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.543860","14":"0.07057859","15":"114","16":"NA","17":"114","18":"Kruskal-Wallis","19":"7.218156e-10"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"65+","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.719646","14":"0.03325011","15":"358","16":"NA","17":"358","18":"Kruskal-Wallis","19":"7.218156e-10"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"DK/Refused/Not answered","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"4.133333","14":"0.35512126","15":"5","16":"NA","17":"5","18":"Kruskal-Wallis","19":"7.218156e-10"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"18-24","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.392361","14":"0.07424815","15":"96","16":"NA","17":"96","18":"Kruskal-Wallis","19":"2.261538e-08"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"25-34","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.323243","14":"0.06177221","15":"185","16":"NA","17":"185","18":"Kruskal-Wallis","19":"2.261538e-08"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"35-44","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.466974","14":"0.04869092","15":"217","16":"NA","17":"217","18":"Kruskal-Wallis","19":"2.261538e-08"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"45-54","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.451835","14":"0.04988980","15":"218","16":"NA","17":"218","18":"Kruskal-Wallis","19":"2.261538e-08"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"55-59","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.500337","14":"0.07501879","15":"99","16":"NA","17":"99","18":"Kruskal-Wallis","19":"2.261538e-08"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"60-64","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.479328","14":"0.06377911","15":"129","16":"NA","17":"129","18":"Kruskal-Wallis","19":"2.261538e-08"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"65+","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.717318","14":"0.03256821","15":"435","16":"NA","17":"435","18":"Kruskal-Wallis","19":"2.261538e-08"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"DK/Refused/Not answered","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"mean","11":"mean","12":"numeric","13":"3.888889","14":"0.14698618","15":"6","16":"NA","17":"6","18":"Kruskal-Wallis","19":"2.261538e-08"},{"1":"Total","2":"Total","3":"Total","4":"Total","5":"Total","6":"Total","7":"Total","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.487181","14":"0.01634180","15":"2602","16":"NA","17":"2602","18":"NA","19":"NA"},{"1":"RSex","2":"RSex","3":"Total","4":"Sex of respondent","5":"Total","6":"Male","7":"Total","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.502264","14":"0.02403121","15":"1217","16":"NA","17":"1217","18":"Kruskal-Wallis","19":"3.830953e-01"},{"1":"RSex","2":"RSex","3":"Total","4":"Sex of respondent","5":"Total","6":"Female","7":"Total","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.472249","14":"0.02215668","15":"1385","16":"NA","17":"1385","18":"Kruskal-Wallis","19":"3.830953e-01"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"18-24","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.415932","14":"0.11256687","15":"63","16":"NA","17":"63","18":"Kruskal-Wallis","19":"3.350678e-15"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"25-34","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.225993","14":"0.05817161","15":"152","16":"NA","17":"152","18":"Kruskal-Wallis","19":"3.350678e-15"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"35-44","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.423678","14":"0.05084910","15":"203","16":"NA","17":"203","18":"Kruskal-Wallis","19":"3.350678e-15"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"45-54","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.542084","14":"0.06012502","15":"202","16":"NA","17":"202","18":"Kruskal-Wallis","19":"3.350678e-15"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"55-59","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.665302","14":"0.06908445","15":"120","16":"NA","17":"120","18":"Kruskal-Wallis","19":"3.350678e-15"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"60-64","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.486259","14":"0.07647255","15":"114","16":"NA","17":"114","18":"Kruskal-Wallis","19":"3.350678e-15"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"65+","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.711325","14":"0.03605062","15":"358","16":"NA","17":"358","18":"Kruskal-Wallis","19":"3.350678e-15"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Male","7":"DK/Refused/Not answered","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"4.296179","14":"0.15490339","15":"5","16":"NA","17":"5","18":"Kruskal-Wallis","19":"3.350678e-15"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"18-24","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.352810","14":"0.08173415","15":"96","16":"NA","17":"96","18":"Kruskal-Wallis","19":"6.205593e-09"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"25-34","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.292486","14":"0.06817460","15":"185","16":"NA","17":"185","18":"Kruskal-Wallis","19":"6.205593e-09"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"35-44","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.437865","14":"0.04856320","15":"217","16":"NA","17":"217","18":"Kruskal-Wallis","19":"6.205593e-09"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"45-54","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.445914","14":"0.04966785","15":"218","16":"NA","17":"218","18":"Kruskal-Wallis","19":"6.205593e-09"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"55-59","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.455355","14":"0.07828175","15":"99","16":"NA","17":"99","18":"Kruskal-Wallis","19":"6.205593e-09"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"60-64","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.408652","14":"0.06383147","15":"129","16":"NA","17":"129","18":"Kruskal-Wallis","19":"6.205593e-09"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"65+","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.701533","14":"0.03568794","15":"435","16":"NA","17":"435","18":"Kruskal-Wallis","19":"6.205593e-09"},{"1":"RSex_X_RAgeCat","2":"RSex","3":"RAgeCat","4":"Sex of respondent","5":"Age of respondent(grouped)<7 category> dv","6":"Female","7":"DK/Refused/Not answered","8":"libauth","9":"Libertarian-authoritarian scale (TradVals to censor) dv","10":"w_mean","11":"w_mean","12":"numeric","13":"3.877654","14":"0.14516854","15":"6","16":"NA","17":"6","18":"Kruskal-Wallis","19":"6.205593e-09"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+</div>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation column-body">
+  <div class="nav-page nav-page-previous">
+      <a href="./calc_stats_walkthrough.html" class="pagination-link" aria-label="Walkthrough calc_stats()">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Walkthrough calc_stats()</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./pairwise testing in calc_stats.html" class="pagination-link" aria-label="pairwise tests">
+        <span class="nav-page-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">pairwise tests</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

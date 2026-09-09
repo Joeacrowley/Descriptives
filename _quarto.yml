@@ -7,6 +7,9 @@ book:
   chapters:
     - index.qmd
     - Overview.qmd
+    - calc_stats_walkthrough.qmd
+    - significance_testing_walkthrough.qmd
+    - "pairwise testing in calc_stats.qmd"
 
 format:
   html:

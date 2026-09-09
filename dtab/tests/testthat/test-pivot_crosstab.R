@@ -1145,8 +1145,8 @@ test_that("17. format_crosstab() still separates two adjacent NUMERIC variables,
 
 test_that("18. pivot_crosstab() returns a legend (element 6) and __sigdiff columns when calc_stats(pairwise = TRUE) was used", {
   data <- tibble(
-    response = factor(c(rep("Yes", 8), rep("No", 2), rep("Yes", 2), rep("No", 8)), levels = c("No", "Yes")),
-    region   = factor(c(rep("North", 10), rep("South", 10)), levels = c("North", "South"))
+    response = factor(c(rep("Yes", 16), rep("No", 4), rep("Yes", 4), rep("No", 16)), levels = c("No", "Yes")),
+    region   = factor(c(rep("North", 20), rep("South", 20)), levels = c("North", "South"))
   )
   stats_table <- calc_stats(data, outcomes = "response", predictors = "region",
                              statistics = "perc", conf = "se", multicode = FALSE, pairwise = TRUE)
@@ -1167,8 +1167,8 @@ test_that("18. pivot_crosstab() returns a legend (element 6) and __sigdiff colum
 
 test_that("19. pivot_crosstab() returns a NULL legend and no __sigdiff columns when pairwise wasn't used (backward compatibility)", {
   data <- tibble(
-    response = factor(c(rep("Yes", 8), rep("No", 2), rep("Yes", 2), rep("No", 8)), levels = c("No", "Yes")),
-    region   = factor(c(rep("North", 10), rep("South", 10)), levels = c("North", "South"))
+    response = factor(c(rep("Yes", 16), rep("No", 4), rep("Yes", 4), rep("No", 16)), levels = c("No", "Yes")),
+    region   = factor(c(rep("North", 20), rep("South", 20)), levels = c("North", "South"))
   )
   stats_table <- calc_stats(data, outcomes = "response", predictors = "region",
                              statistics = "perc", conf = "se", multicode = FALSE, pairwise = FALSE)
@@ -1180,9 +1180,9 @@ test_that("19. pivot_crosstab() returns a NULL legend and no __sigdiff columns w
 
 test_that("20. format_crosstab() shows the legend as its own first row, a Sig. diff row instead of SE, with the letters matching pivot_crosstab()'s own legend element", {
   data <- tibble(
-    response = factor(c(rep("Yes", 8), rep("No", 2), rep("Yes", 2), rep("No", 8)), levels = c("No", "Yes")),
-    region   = factor(c(rep("North", 10), rep("South", 10)), levels = c("North", "South")),
-    wt       = rep(1, 20)
+    response = factor(c(rep("Yes", 16), rep("No", 4), rep("Yes", 4), rep("No", 16)), levels = c("No", "Yes")),
+    region   = factor(c(rep("North", 20), rep("South", 20)), levels = c("North", "South")),
+    wt       = rep(1, 40)
   )
   design <- data %>% srvyr::as_survey_design(ids = 1, weights = wt)
 
@@ -1423,20 +1423,15 @@ test_that("24. format_crosstab() on a fuller w_mean table - two predictor sets, 
 })
 
 
-test_that("25. format_crosstab() still inserts a (blank) Sig. diff row when a row WAS pairwise-tested but nothing came out significant - regression test for a real bug", {
-  # North and South have IDENTICAL 50/50 Yes/No splits - pairwise_test_one_
-  # group() will genuinely test this (it's an eligible stat, cross_break !=
-  # "Total"), find no significant difference, and mark sig_diff = "" for
-  # both levels (not NA - NA means "never tested", "" means "tested, found
-  # nothing" - see calc_stats.R's own note on that distinction). The bug:
-  # format_crosstab() used to only insert a Sig. diff row when at least one
-  # level had a REAL (non-empty) difference, so this exact case - genuinely
-  # tested, correctly found nothing - silently produced a table with no Sig.
-  # diff row at all, indistinguishable from "pairwise wasn't requested".
-  # Fixed to key off "was this row tested" (any non-NA, empty string
-  # included) rather than "did this row find anything" - so the row now
-  # always appears whenever pairwise = TRUE actually ran against it, blank
-  # or not.
+test_that("25. format_crosstab() still inserts a Sig. diff row when a row WAS pairwise-tested but nothing came out significant", {
+  # North and South have IDENTICAL 50/50 Yes/No splits - genuinely tested
+  # (an eligible stat, cross_break != "Total"), found no significant
+  # difference, and add_pairwise_sig() marks sig_diff = "-" for both levels
+  # (not NA - NA means "never tested at all", e.g. the Total row; "-" means
+  # "tested, found nothing" OR "no pairwise-eligible comparison" - the new
+  # system doesn't distinguish those two sub-cases the way the old exact/
+  # covmat system's "" vs NA convention did, but it still distinguishes
+  # "tested this row" (real predictor level) from "never in scope" (Total)).
   data <- tibble(
     response = factor(rep(c("Yes", "No"), 20), levels = c("No", "Yes")),
     region   = factor(c(rep("North", 20), rep("South", 20)), levels = c("North", "South")),
@@ -1447,12 +1442,12 @@ test_that("25. format_crosstab() still inserts a (blank) Sig. diff row when a ro
   stats_table <- calc_stats(design, outcomes = "response", predictors = "region",
                              statistics = "w_perc", conf = "se", multicode = FALSE, pairwise = TRUE)
 
-  # Confirm the premise first: genuinely tested (non-NA), genuinely nothing
-  # significant (empty string, not a real letter list) - otherwise this test
-  # would be checking the wrong scenario entirely.
+  # Confirm the premise first: genuinely not significant ("-"), not simply
+  # never tested (NA) - otherwise this test would be checking the wrong
+  # scenario entirely.
   yes_row <- stats_table %>% filter(o_cat == "Yes", cross_break == "region", p_cat1 == "North")
   expect_false(is.na(yes_row$sig_diff))
-  expect_equal(yes_row$sig_diff, "")
+  expect_equal(yes_row$sig_diff, "-")
 
   result <- format_crosstab(pivot_crosstab(stats_table))
   print(huxtable::as_flextable(result))
@@ -1462,22 +1457,17 @@ test_that("25. format_crosstab() still inserts a (blank) Sig. diff row when a ro
   yes_result_row <- which(result[["Variable"]] == "Yes")
   diff_row <- yes_result_row + 1
   expect_equal(result[["Statistics"]][diff_row], "Sig. diff")
-  # Blank, not "-" (that's reserved for a genuinely untested/NA cell - see
-  # the NA-string handling further down format_crosstab()) and not a real
-  # letter (nothing was significant).
-  expect_equal(result[["North"]][diff_row], "")
-  expect_equal(result[["South"]][diff_row], "")
+  # A real "-" value (not a letter - nothing was significant), same literal
+  # marker calc_stats() itself stores.
+  expect_equal(result[["North"]][diff_row], "-")
+  expect_equal(result[["South"]][diff_row], "-")
 
   # Total's own cell on this row is a DIFFERENT case from North/South's -
   # genuinely NA (Total is never pairwise-compared at all, not "tested and
   # found nothing" - see calc_stats.R's own cross_break != "Total" filter),
-  # so it's stored as a real NA, not an empty string. Without the fix, that
-  # NA would render as "-" (huxtable's configured na_string for a data/conf/
-  # sigdiff cell), sitting inconsistently next to North/South's blank cells
-  # on the exact same row - fixed by excluding Total specifically from the
-  # "-" na_string override on sigdiff rows, so it falls through to the
-  # table's base na_string ("") instead, reading the same as "nothing to
-  # report here" as its neighbours, not "something's missing".
+  # rendered blank via its own na_string override rather than literal "-",
+  # so it still reads visibly differently from North/South's real "-" value
+  # on the exact same row.
   total_col <- which(names(result) == "Total")
   expect_true(is.na(result[["Total"]][diff_row]))
   expect_equal(huxtable::na_string(result)[diff_row, total_col], "")

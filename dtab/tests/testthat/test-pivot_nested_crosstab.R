@@ -172,16 +172,11 @@ test_that("4. pivot_nested_crosstab() rejects more than one statistic on a categ
 
 # Male/Young: Yes,Yes,No,No -> 2/4 = 0.5     Male/Old: Yes,No,No,No -> 1/4 = 0.25
 # Female/Young: Yes,Yes,Yes,No -> 3/4 = 0.75
-# Female/Old: No,No,No,No -> zero "Yes" respondents in that group. calc_stats()
-# never produces a row for a zero-occurrence o_cat level at all (see the
-# header note on this in pivot_nested_crosstab.R - group_by() on two factor
-# columns together doesn't invent unobserved combinations the way grouping
-# by one factor does), so pivot_nested_crosstab() currently fills that cell
-# as NA (renders as "-" downstream in format_nested_crosstab()), not a
-# computed 0 - this is a real, still-open design question (flagged to Joe,
-# not yet answered): should a genuine zero-occurrence category display "0"
-# instead of a dash? If that gets implemented later, this assertion is the
-# one that would need to flip from NA to 0.
+# Female/Old: No,No,No,No -> zero "Yes" respondents in that group, but a
+# real, computed 0 - calc_stat_engine()'s group_by(.drop = FALSE) on the
+# outcome axis restores a zero-occurrence o_cat level rather than dropping
+# the row, since the group's own total is known regardless of which
+# category was picked.
 
 test_that("5. pivot_nested_crosstab() handles a categorical variable with label + level rows", {
   data <- tibble(
@@ -206,7 +201,7 @@ test_that("5. pivot_nested_crosstab() handles a categorical variable with label 
   expect_equal(yes_row[["Male: Young"]], 0.5)
   expect_equal(yes_row[["Male: Old"]], 0.25)
   expect_equal(yes_row[["Female: Young"]], 0.75)
-  expect_true(is.na(yes_row[["Female: Old"]]))
+  expect_equal(yes_row[["Female: Old"]], 0)
 })
 
 
@@ -743,13 +738,18 @@ test_that("16. format_nested_crosstab() renders a fuller, weighted, pairwise + p
 # (~3.78) and clearly-separated group means (15/35/55/75), so pairwise
 # differences here are genuinely significant, not just structurally present.
 build_nested_mean_design <- function() {
+  # 10 observations per (sex, age_group) cell - safe_ttest()'s min_n = 10
+  # guard needs at least that many per group, unlike the old exact/covmat
+  # system this replaced, which could compute a design-based SE from a
+  # single observation per cell. Small real within-group spread (not a
+  # constant - see test 27's own note in test-add_pairwise_sig.R on why a
+  # constant value gives SE = 0 and gets skipped rather than tested) around
+  # four well-separated means (15/35/55/75).
   data <- tibble(
-    score     = c(10, 20, 30, 40, 50, 60, 70, 80),
-    sex       = factor(c("Male", "Male", "Male", "Male", "Female", "Female", "Female", "Female"),
-                        levels = c("Male", "Female")),
-    age_group = factor(c("Young", "Young", "Old", "Old", "Young", "Young", "Old", "Old"),
-                        levels = c("Young", "Old")),
-    wt        = rep(1, 8)
+    score     = c(11:20, 31:40, 51:60, 71:80),
+    sex       = factor(rep(c("Male", "Female"), each = 20), levels = c("Male", "Female")),
+    age_group = factor(rep(c("Young", "Old"), each = 10, times = 2), levels = c("Young", "Old")),
+    wt        = rep(1, 40)
   )
   data %>% srvyr::as_survey_design(ids = 1, weights = wt)
 }
@@ -882,7 +882,7 @@ test_that("20. format_nested_crosstab() still inserts a (blank) Sig. diff row wh
   # mistake, not a real problem with the fix itself.
   yes_rows <- stats_table %>% filter(o_cat == "Yes", cross_break != "Total")
   expect_true(all(!is.na(yes_rows$sig_diff)))
-  expect_true(all(yes_rows$sig_diff == ""))
+  expect_true(all(yes_rows$sig_diff == "-"))
 
   result <- format_nested_crosstab(pivot_nested_crosstab(stats_table))
   print(result %>% huxtable::as_flextable())
@@ -902,7 +902,7 @@ test_that("20. format_nested_crosstab() still inserts a (blank) Sig. diff row wh
   level_cols <- setdiff(names(result), c("Variable", "Statistics"))
   level_cols <- level_cols[!grepl("^p_value", level_cols)]
   for (r in sigdiff_rows) {
-    expect_true(all(result[level_cols][r, ] == "" | is.na(result[level_cols][r, ])))
+    expect_true(all(result[level_cols][r, ] == "-" | is.na(result[level_cols][r, ])))
   }
 })
 

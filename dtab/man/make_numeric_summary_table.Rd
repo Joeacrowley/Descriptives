@@ -37,11 +37,9 @@ returned by \code{\link[=pivot_numeric_summary]{pivot_numeric_summary()}}.
 \description{
 Single entry point chaining \code{\link[=pivot_numeric_summary]{pivot_numeric_summary()}} straight to
 \code{\link[=format_numeric_summary]{format_numeric_summary()}} - the numeric-summary equivalent of
-\code{\link[=make_table]{make_table()}}'s one-call convenience, kept as a separate function
-rather than folded into \code{make_table()} (see this file's header note for
-the dispatch-collision reasoning: \code{predictors = NULL} already routes
-\code{make_table()} to a plain summary table, and a numeric-statistics grid
-is also a no-predictors table).
+\code{\link[=make_table]{make_table()}}'s one-call convenience, kept separate rather than folded
+in (see this file's header note, and \code{\link[=make_table]{make_table()}}'s own header note
+for the \code{formatted} toggle's shared design rationale).
 }
 \seealso{
 \code{\link[=pivot_numeric_summary]{pivot_numeric_summary()}}, \code{\link[=format_numeric_summary]{format_numeric_summary()}}

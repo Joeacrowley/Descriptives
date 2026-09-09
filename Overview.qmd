@@ -25,7 +25,7 @@ library(tibble)  # for tibble(), used to build the example datasets below
 ``` r
 calc_stats(data, outcomes, predictors = NULL, statistics = c("count", "mean"),
            conf = NULL, base = NULL, pval = NULL, multicode = TRUE,
-           pairwise = FALSE)
+           pairwise = FALSE, pw_outcome_levels = NULL, pw_crit_lev = 0.05)
 ```
 
 **Arguments**
@@ -38,7 +38,9 @@ calc_stats(data, outcomes, predictors = NULL, statistics = c("count", "mean"),
 -   `base` - output of `base_information()` - a lookup of base-description text per variable. `NULL` omits base descriptions.
 -   `pval` - if not `NULL`, a significance test is run and joined in. Only for FLAT predictor sets - nested sets get their own per-outer-level p-value automatically (see section 3 below); no method exists for a flat set's p-value AND a nested set's in the same call being conflated.
 -   `multicode` - `TRUE` (default): auto-detect and collapse variables sharing a common name+label stem into one multicoded variable.
--   `pairwise` - `FALSE` (default). `TRUE` runs `add_pairwise_sig()` automatically and appends `sig_letter`/`sig_diff` columns (and, for the stats that support it, a `covmat` list-column) - see section 2.
+-   `pairwise` - `FALSE` (default). `TRUE` runs `add_pairwise_sig()` automatically and appends `sig_letter`/`sig_diff` columns - see section 2.
+-   `pw_outcome_levels` - optional named list restricting which outcome categories get pairwise-tested (names are outcome variable names, values are the categories to test). Only used when `pairwise = TRUE`.
+-   `pw_crit_lev` - significance threshold for `sig_diff` flagging when `pairwise = TRUE`. Default `0.05`.
 
 **Output columns**
 
@@ -56,7 +58,6 @@ calc_stats(data, outcomes, predictors = NULL, statistics = c("count", "mean"),
 -   `unweighted_n` - cell count.
 -   `p_method`/`p_value` - present when `pval` was requested.
 -   `sig_letter`/`sig_diff` - present when `pairwise = TRUE` (section 2).
--   `covmat` - present when `pairwise = TRUE` AND this row's stat has an exact covariance path (`w_perc`, `w_mean` only - section 2).
 
 ```{r}
 example_data <- tibble(
@@ -75,18 +76,26 @@ calc_stats(example_data, outcomes = "approve", predictors = "region",
 
 ## 2. Pairwise significance testing (`pairwise = TRUE`)
 
-For each (outcome, cross_break, stat, o_cat) group, every pair of predictor levels is z-tested against each other. Two new columns appear:
+Only an outcome's *preferred* statistic gets pairwise-tested - weighted over unweighted, and `mean`/`perc` over their `w_`-prefixed twins, where both are available (testing both would just double the work for a result nobody reports twice). Every pair of predictor levels for that statistic gets a genuine two-sample test (`t.test()` for plain data, `svyttest()` for a survey design), via a shared `safe_ttest()` helper. Two new columns appear:
 
--   `sig_letter` - one letter per predictor level (within a `cross_break`), used as a shared reference key.
--   `sig_diff` - for each row, the OTHER levels' letters that this level differs significantly from (alpha = 0.05 by default), `""` if tested but nothing significant, `NA` if not tested at all (e.g. the Total row, or a stat outside `pairwise_eligible_stats`).
+-   `sig_letter` - one letter per predictor level, restarting at "a" for each `cross_break`. A nested predictor set (`c("outer", "inner")`) is one combined set of levels, not lettered separately per outer level. Assigned to every non-`Total` row regardless of whether that block was actually eligible for testing.
+-   `sig_diff` - for each row, the OTHER levels' letters that this level differs significantly from. `"-"` once at least one predictor set in the call is pairwise-eligible, for any row that wasn't itself significant (or wasn't itself eligible); `NA` for the `Total` row always, and for every row when *nothing* in the call was eligible at all (e.g. a lone predictor set longer than two variables).
 
-Two different ways the comparison's standard error gets computed, entirely determined by the stat - not something you choose:
+Two adjustments happen, only one of which actually decides anything: `pw_test_cats()`/`pw_test_means()` compute a Holm-adjusted p-value within one outcome level's own set of comparisons, but that column is never read downstream - `merge_p_letters()` recomputes its own adjustment from the raw p-value using BH (Benjamini-Hochberg) across the whole predictor-outcome pair, and it's the BH result that actually decides `sig_diff`.
 
--   **EXACT (real joint covariance)**: `w_perc`, `w_mean` only. `calc_stats()` swaps these to `svyby()`-based twins (`weighted_perc_svyby()`/`weighted_mean_svyby()`) under `pairwise = TRUE`, which attach a real covariance matrix per group (the `covmat` column) via `survey::svyby(..., covmat = TRUE)`. `SE_diff` is computed properly as `Var_i + Var_j - 2*Cov_ij`, not assuming independence.
--   **APPROXIMATE (independent-SE fallback)**: everything else that's eligible - `perc`, `count`, `w_count`, `mean`, `median`, `w_median`. No joint covariance exists (or, for `w_count`/`count`/`perc`, wasn't built) - `SE_diff` is combined assuming `Cov_ij = 0`: `sqrt(SE_i^2 + SE_j^2)`, using each stat's own normal SE (still the real design-based SE where one exists - e.g. `w_median`'s SE still comes from `survey::svyquantile()`'s Woodruff-CI method; only the CROSS-GROUP covariance is approximated as zero, never the per-group SE itself). Requires `conf = "se"` or `conf = "ci"` to have anything to fall back on - otherwise those rows are skipped (a warning is issued, not an error).
--   **Medians** (`median`/`w_median`) are ALWAYS on the approximate path - survey's `svyquantile()` doesn't return influence functions, so `covmat = TRUE` has nothing to build from for either. This is a hard limitation of the survey package, not a scope choice the way it was for means.
+`safe_ttest()` refuses to test a comparison where either group's base is below 10, or (for a categorical outcome) the smaller category within a group is below 3 - a comparison that fails this is skipped with a warning, and currently renders identically to "tested, not significant" (`"-"`), not a distinct marker. Only flat or single-level-nested predictor sets are supported - anything longer is silently excluded from testing (still appears in the table, per the `sig_diff` rule above).
 
-`pairwise_eligible_stats` (in `calc_stats.R`) is the full current whitelist: `perc`, `w_perc`, `count`, `w_count`, `mean`, `w_mean`, `median`, `w_median`. `sum`/`sd`/`iqr`/`min`/`max`/`range` are NOT eligible - requesting `pairwise = TRUE` alongside one of those just leaves `sig_letter`/`sig_diff` as `NA` for that row.
+```{r}
+calc_stats(example_design, outcomes = "approve", predictors = "region",
+           statistics = "w_perc", conf = "se", pairwise = TRUE) %>%
+  select(cross_break, p_cat1, estimate, sig_letter, sig_diff)
+
+calc_stats(example_design, outcomes = "score", predictors = "region",
+           statistics = "w_mean", conf = "se", pairwise = TRUE) %>%
+  select(cross_break, p_cat1, estimate, sig_letter, sig_diff)
+```
+
+See *Pairwise testing in calc_stats* for the full function-by-function walkthrough.
 
 ```{r}
 calc_stats(example_design, outcomes = "approve", predictors = "region",
@@ -252,8 +261,9 @@ export_table_to_excel(make_table(example_data, outcomes = "approve",
 
 ## 7. Known limitations / open items
 
--   Medians (`median`/`w_median`) can only ever use the approximate pairwise path - no exact covariance is possible via the survey package, not a scope choice.
--   `sum`/`sd`/`iqr`/`min`/`max`/`range` are not pairwise-eligible at all.
+-   Only `mean`/`w_mean`/`perc`/`w_perc` are pairwise-eligible - `median`/`w_median`/`sum`/`sd`/`iqr`/`count`/`w_count`/`min`/`max`/`range` are not, and just leave `sig_letter`/`sig_diff` as `NA` for that row.
+-   A comparison `safe_ttest()` refuses (base below 10, or smaller category below 3) currently renders identically to "tested, not significant" (`"-"`) - it warns at the console, but there's no distinct table marker for "couldn't test" versus "tested and found nothing" yet.
+-   Only flat or single-level-nested predictor sets are pairwise-eligible - a set longer than two variables is silently excluded from testing.
 -   Nested predictor sets get no p-value method of their own for the FLAT-style single p-value - only the per-outer-level p-value described in section 3.
 -   `export_to_excel.R` writes numbers as text, not real Excel numeric cells.
 -   The "Methodological decisions requiring sign-off" list in `Old/Overview.qmd` (Shapiro-Wilk threshold, chi-square with no sparse-cell fallback, multicode same-base-size assumption) applies unchanged here - `dtab` ported this logic without revisiting those decisions.

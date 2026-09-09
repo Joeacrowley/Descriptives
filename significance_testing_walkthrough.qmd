@@ -1,0 +1,230 @@
+---
+title: "Walkthrough calc_stats() significance testing"
+format:
+  html:
+    df-print: paged
+---
+
+## Set up
+
+```{r setup, collapse=T, message=F, warning=F}
+devtools::load_all("dtab")
+library(tidyverse)
+library(srvyr)
+library(labelled)
+
+df2    <- readRDS(here::here("data", "synthetic_bsa_clean.rds"))
+df_svy <- df2 %>% as_survey_design(weight = WtFactor)
+```
+
+This describes how `calc_stats` adds significance testing.
+
+The output after it is run is to two new columns attached to the data frame output:   
+
+* p_method - the type of test run,  
+* p_value - the p-value for that predictor-outcome pair.  
+
+Run outside `calc_stats` it generates a data frame output with the same column structure as calc_stats, so they just merge back on to the main data frame. 
+
+
+<br>
+
+## The individual test functions
+
+Same pattern as the stat functions: one function per weighted/outcome-type combination, each a thin shell wrapping a shared engine.
+
+- `unweighted.factor` — `unweighted_test_cat_by_cat()` (Chi-Square)
+- `unweighted.numeric` — `unweighted_test_numeric_by_cat()` (Welch's ANOVA, or Kruskal-Wallis if `shapiro.test()` on the residuals flags non-normality)
+- `weighted.factor` — `weighted_test_cat_by_cat()` (`survey::svychisq()`, adjWald)
+- `weighted.numeric` — `weighted_test_numeric_by_cat()` (Wald test via `survey::regTermTest()` on a `svyglm()`, or `survey::svyranktest()` if non-normal)
+
+Each one supplies `run_assoc_test()` with `weighted` (TRUE/FALSE), `stat_labels` (which stat codes this test's p-value should be attached to - e.g. `c("mean", "median", "sum", "min", "max", "range", "iqr", "sd")` for the unweighted numeric case), and a `test` closure that actually runs the test and returns `list(method, p)`.
+
+```{r}
+unweighted_test_numeric_by_cat(df2, outcome = "libauth", predictor = "RSex") %>%
+  rmarkdown::paged_table()
+```
+
+```{r}
+weighted_test_cat_by_cat(df_svy, outcome = "skipmeal", predictor = "RSex") %>%
+  rmarkdown::paged_table()
+```
+
+<br>
+
+## `run_assoc_test()`
+
+The shared engine every test function above wraps - directly analogous to `calc_stat_engine()` for the stat functions.
+
+It builds the variable labels, runs the `test` closure (wrapped in `tryCatch()`, so a test failure becomes `NA` rather than crashing `calc_stats()`), assembles one result row, then fans that single row out - via `map_df(stat_labels, ...)` - into one copy per stat code in `stat_labels`.
+
+That fan-out matters because a p-value belongs to the (outcome, predictor) *pair*, not to any one statistic, but it still needs to be joinable against `calc_stats()`'s output later, which has one row per (outcome, stat, predictor level) - hence one identical p-value row per relevant stat.
+
+```{r}
+
+# It first pulls out the predictor and outcome variables...
+outcome   <- "libauth"
+predictor <- "RSex"
+
+# It has an agument called `test`, which is what actually differs for the four wrappers around it
+# This is the test for `unweighted_test_numeric_by_cat`.
+test_result <- tryCatch(
+  {
+    x <- df2 %>% pull(predictor); y <- df2 %>% pull(outcome)
+    keep <- complete.cases(y, x); y <- y[keep]; x <- x[keep]
+    model <- lm(y ~ x)
+    if (shapiro.test(residuals(model))$p.value < 0.05) {
+      list(method = "Kruskal-Wallis", p = kruskal.test(y ~ x)$p.value)
+    } else {
+      list(method = "Welch's ANOVA", p = oneway.test(y ~ x, var.equal = FALSE)$p.value)
+    }
+  },
+  error = function(e) list(method = "Significance test returned an error.", p = NA)
+)
+
+# And the it assembles the results with standardised labels so they can match on to calc_stats dataframe.
+output_tbl <- tibble(
+  cross_break = predictor, predictor1 = predictor,
+  p_lab1 = df2 %>% select(all_of(predictor)) %>% var_label(unlist = TRUE, null_action = "fill"),
+  outcome = outcome,
+  o_lab = df2 %>% select(all_of(outcome)) %>% var_label(unlist = TRUE, null_action = "fill"),
+  p_method = test_result$method, p_value = test_result$p
+)
+
+output_tbl
+
+# It then fans-out the result - one row per numeric stat code, same p-value repeated
+# Again, so that it can map on to calc_stats data frame
+map_df(c("mean", "median", "sum", "min", "max", "range", "iqr", "sd"),
+       ~ output_tbl %>% mutate(stat = .x)) %>%
+  rmarkdown::paged_table()
+```
+
+<br>
+
+## Automatcally select test
+
+This is done by `return_pvalues()` and `test_registry`.
+
+This uses a named list as a lookup-by-key mechanism.
+
+`return_pvalues()` works out whether `data` is a survey design and whether the outcome is a factor, pastes those two into a key (e.g. `"weighted.numeric"`), and looks that key up in `test_registry`.
+
+```{r}
+test_registry <- list(
+  "unweighted.factor"  = unweighted_test_cat_by_cat,
+  "unweighted.numeric" = unweighted_test_numeric_by_cat,
+  "weighted.factor"    = weighted_test_cat_by_cat,
+  "weighted.numeric"   = weighted_test_numeric_by_cat
+)
+```
+
+`test_registry` contains the functions themselves, for application they can then be called and applied like this, which is what `return_pvalues` does.
+
+```{r}
+test_registry[["unweighted.numeric"]](df2, outcome = "libauth", predictor = "RSex") %>%
+  rmarkdown::paged_table()
+```
+
+`return_pvalues()` then can automates selection of significance test based on the types of outcome it is fed.
+
+```{r}
+return_pvalues(df_svy, outcome = "libauth", predictor = "RSex") %>%
+  rmarkdown::paged_table()
+return_pvalues(df2, outcome = "skipmeal", predictor = "RSex") %>%
+  rmarkdown::paged_table()
+```
+
+<br>
+
+## Map over outcome-predictor sets. 
+
+`map_return_p_values` loops `return_pvalues()` over every predictor × outcome combination requested, binding the results into one tibble:
+
+```{r}
+map_return_p_values <- function(outcomes, predictors, data) {
+  map_df(predictors, function(pred) {
+    map_df(outcomes, function(out) {
+      return_pvalues(data = data, outcome = out, predictor = pred)
+    })
+  })
+}
+
+map_return_p_values(data = df_svy, outcomes = "libauth", predictors = "RSex") %>%
+  rmarkdown::paged_table()
+```
+
+Note `predictors` here is a plain character vector of single variable names, not the nested-list shape `calc_stats(predictors = ...)` takes - `calc_stats()` unpacks that itself first (`pvalue_preds <- predictors[predictors %>% map_lgl(~ length(.x) == 1)] %>% unlist() %>% unique()`), keeping only the flat (non-nested) predictor sets before calling this.
+
+A nested 2-variable predictor set (e.g. `list(c("RSex", "RAgeCat"))`) skips this function entirely and goes to `nested_pvalues()` instead, covered next.
+
+<br>
+
+## Nested tests
+
+For a nested predictor set, one omnibus p-value across every cell doesn't really answer a useful question. What `calc_stats()` actually wants, for e.g. `RSex` (outer) x `RAgeCat` (inner), is: within each sex, is age associated with the outcome? So it's one p-value per outer level, not one for the whole table.
+
+It reuses `return_pvalues()` unchanged - same test-selection logic as above - just called once per outer level, against a filtered subset of the data for that level.
+
+```{r}
+
+outer_var <- "RSex"
+inner_var <- "RAgeCat"
+outcome   <- "libauth"
+
+# It first works out which levels the outer variable actually has...
+plain_data   <- df_svy[["variables"]]
+outer_levels <- plain_data %>% pull(outer_var) %>% unique() %>% na.omit() %>% as.character()
+outer_levels
+
+# ...then, for each outer level in turn, filters down to just that subset and
+# runs return_pvalues() as normal - testing the inner variable against the
+# outcome, within that one level only.
+map_df(outer_levels, function(lvl) {
+  subset_data <- df_svy %>% filter(.data[[outer_var]] == lvl)
+  return_pvalues(data = subset_data, outcome = outcome, predictor = inner_var) %>%
+    mutate(cross_break = paste0(outer_var, "_X_", inner_var), p_cat1 = lvl)
+}) %>%
+  rmarkdown::paged_table()
+```
+
+Which is exactly what `nested_pvalues()` itself does in one call:
+
+```{r}
+nested_pvalues(df_svy, outcomes = "libauth", outer_var = "RSex", inner_var = "RAgeCat") %>%
+  rmarkdown::paged_table()
+```
+
+Note it only ever takes a single (outer, inner) pair - `calc_stats()` loops over `nested_preds` itself (once per nested predictor set requested) before calling this, the same way it unpacks `pvalue_preds` before calling `map_return_p_values()`.
+
+<br>
+
+## Applying inside calc_stats
+
+```{r}
+calc_stats(
+  df_svy,
+  outcomes   = "libauth",
+  predictors = list("RSex"),
+  statistics = c("mean", "w_mean"),
+  conf       = "se",
+  pval       = TRUE
+) %>%
+  rmarkdown::paged_table()
+```
+
+`p_method`/`p_value` are now attached to every row - `calc_stats()` ran `map_return_p_values()` once against the unweighted data (for `mean`) and once against the weighted data (for `w_mean`), then `left_join()`'d both back onto `merged_tables`.
+
+Adding a nested predictor set alongside the flat one shows both mechanisms firing in the same call - the flat `RSex` rows get their p-value from `map_return_p_values()`, the nested `RSex_X_RAgeCat` rows get theirs from `nested_pvalues()`, and `coalesce()` merges the two onto one `p_value` column:
+
+```{r}
+calc_stats(
+  df_svy,
+  outcomes   = "libauth",
+  predictors = list("RSex", c("RSex", "RAgeCat")),
+  statistics = c("mean", "w_mean"),
+  conf       = "se",
+  pval       = TRUE
+) %>%
+  rmarkdown::paged_table()
+```

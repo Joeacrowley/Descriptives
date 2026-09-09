@@ -1,0 +1,811 @@
+---
+title: "pairwise tests"
+format: html
+editor: visual
+---
+
+This file runs through how pairwise tesitng is applied in `calc_stats` and `dtab` generally.
+
+First, some test data...
+
+Very little is significant, as no effort is made to create associations between variables.
+
+```{r setup, collapse=T, message=F, warning=F}
+# devtools::load_all("dtab")
+# source("./dtab/R/calc_stats.R")
+library(tidyverse)   # for %>%, used throughout the examples below
+library(survey)
+library(dtab)
+
+example_data <- tibble(
+  score    = c(rnorm(500, 60, 12), rnorm(500, 45, 12)),
+  approve  = factor(sample(c("Yes", "No"), 1000, replace = TRUE, prob = c(0.6, 0.4))),
+  region   = factor(rep(c("North", "South", "East", "West"), each = 250)),
+  wt       = runif(1000, 0.7, 1.4), 
+  sex      = factor(rep(c("F","M"), 500, replace = T)),
+  trust    = factor(sample(c("Yes", "No"), 1000, replace = TRUE, prob = c(0.45, 0.55))),
+  urban    = factor(sample(c("Urban", "Rural"), 1000, replace = TRUE, prob = c(0.7, 0.3))),
+  age      = round(rnorm(1000, 45, 15))
+)
+
+example_design <- example_data %>% srvyr::as_survey_design(ids = 1, weights = wt)
+
+```
+
+A reminder on how `calc_stats` style tables look, this is where pairwise testing results are stored, in `sig_diff` and `sig_letter`.
+
+-   `sig_letter` is a letter based identifer for each predictor level. These reset to a for each new predictor. Nested predictors are treated as a single combined set.
+
+-   `sig_diff` for each predictor row, this tells you which letters (other predictor levels) this predictor level differs from.
+
+The underlying p-values are not returned in the `calc_stats` output.
+
+Here, none are significant, returning '-'.
+
+```{r}
+
+calc_stats(example_data, outcomes = "approve", predictors = "region",
+           statistics = "perc", conf = "se", pval = TRUE, pairwise = T)
+
+```
+
+<br>
+
+This is because the test data has no associations to be found, so, for illustration I set the critical level to 0.5.
+
+Now, `sig_letter` flags some statistically significant differences.
+
+```{r}
+
+calc_stats(example_data, outcomes = "approve", predictors = "region",
+           statistics = "perc", conf = "se", pval = TRUE, pairwise = T, 
+           pw_crit_lev = 0.5 # by default - 0.05
+           )
+
+```
+
+<br>
+
+The underlying functions going into this are summarised below.
+
+## A t-test function
+
+First, a t-test function that refuses to test when the base for any group is below 10 and the smallest category in any cell is below 3. These criteria are not exposed to calc_stats at present, but could be.
+
+It identifies whether data is a plain data frame or a survey data object, and applies a different test depending on what it is fed. Otherwise, it is simply a t.test.
+
+```{r}
+
+safe_ttest <- function(
+    formula, 
+    data, 
+    is_categorical = FALSE,
+    min_n = 10, 
+    min_cat_n = 3
+    ) {
+  
+  is_survey_data <- any(grepl("survey", class(data)))
+  if(is_survey_data){
+    
+    plain_data <- data[["variables"]]
+    chosen_test <- svyttest
+    
+    } else {
+      
+    plain_data <- data
+    chosen_test <- t.test
+
+  }
+
+  resp_name <- all.vars(formula)[1]
+  grp_name  <- all.vars(formula)[2]
+  resp <- plain_data[[resp_name]]
+  grp  <- plain_data[[grp_name]]
+  
+  group_checks <- tapply(resp, grp, function(x) {
+    tibble(
+      n = length(x),
+      min_cat_count = if (is_categorical) min(sum(x == 0), sum(x == 1)) else NA_integer_
+    )
+  })
+  
+  bad_groups <- keep(group_checks, \(g) {
+    g$n < min_n || (is_categorical && g$min_cat_count < min_cat_n)
+  })
+  
+  if (length(bad_groups) > 0) {
+    reasons <- imap_chr(bad_groups, \(g, nm) {
+      why <- if (g$n < min_n) {
+        paste0("n=", g$n, " (< ", min_n, ")")
+      } else {
+        paste0("only ", g$min_cat_count, " case(s) in the smaller outcome category (< ", min_cat_n, ")")
+      }
+      paste0(grp_name, "=", nm, ": ", why)
+    })
+    rlang::abort(paste0("safe_ttest(): comparison not testable - ",
+                        paste(reasons, collapse = "; ")))
+  }
+  
+  chosen_test(formula, data) |> broom::tidy()
+}
+
+```
+
+<br>
+
+### Example applications
+
+#### Unweighted data
+
+```{r}
+
+example_data |>
+  filter(region %in% c("North", "South")) |>
+  mutate(grp = as.numeric(region == "South"),
+         out_num = as.numeric(approve == "Yes")) |>
+  safe_ttest(out_num ~ grp, data = _, is_categorical = TRUE)
+
+```
+
+#### Weighted data
+
+```{r}
+
+example_design |>
+  filter(region %in% c("North", "South")) |>
+  mutate(grp = as.numeric(region == "South"),
+         out_num = as.numeric(approve == "Yes")) |>
+  safe_ttest(out_num ~ grp, data = _, is_categorical = TRUE)
+
+```
+
+#### Error provoking tiny data
+
+```{r, error=T}
+# ---- tiny dataset built specifically to fail the guard ----
+tiny_data <- tibble(
+  approve = factor(c(rep("No", 5), "Yes",              # Alpha: 6 total  - fails min_n
+                      rep("No", 10), rep("Yes", 2))),   # Beta: 12 total, only 2 "Yes" - fails min_cat_n
+  region  = factor(c(rep("Alpha", 6), rep("Beta", 12)))
+)
+
+tiny_data |>
+  mutate(grp = as.numeric(region == "Beta"),
+         out_num = as.numeric(approve == "Yes")) |>
+  safe_ttest(out_num ~ grp, data = _, is_categorical = TRUE)
+```
+
+<br>
+
+## Pairwise test
+
+These next two use `safe_ttest` to conduct pairwise testing.
+
+### Categorical variables
+
+`pw_test_cats` runs on one level of an outcome variable, comparing whether the percentage of people in that group differs between levels of a predictor. It allows specific level comparisons to be made with `level_comparisons` although `calc_stats` does not use this.
+
+It also returns an adjusted p-value (`p_adj`, Holm), correcting for multiple comparisons within that one outcome level. `calc_stats`, however, doesn't actually use this column - `merge_p_letters()` recomputes its own adjustment from the raw `p.value`, using BH (Benjamini-Hochberg) across *all* comparisons for that predictor-outcome pair, and filters on that instead. So the `p_adj` column that survives into the output is not what decides `sig_diff` - it's a leftover from this stage, unused downstream. BH is also generally *less* conservative than Holm for the same number of tests (it controls the false discovery rate, not the family-wise error rate), so this isn't simply a stricter version of the same correction - it's a different one entirely.
+
+It can take a vector of up to length 2 as the predictor, and combines those two variables into a single factor with `fct_cross` for the purpose of comparison.
+
+```{r}
+
+pw_test_cats <- function(outcome, outcome_level, predictor, data,
+                         level_comparisons = NULL,
+                         p_adjust_method = "holm"){
+  
+  is_survey_data <- any(grepl("survey", class(data)))
+  
+  nested          <- length(predictor) > 1
+  predictor_label <- paste0(predictor, collapse = "_X_")
+  predictor_var   <- if (nested) predictor_label else predictor
+  
+  nest_val      <- if (nested) predictor[1] else NA_character_
+  main_pred_val <- if (nested) paste0(predictor[-1], collapse = "_X_") else predictor
+  
+  if (nested) {
+    data <- data |>
+      mutate(across(all_of(predictor), haven::as_factor)) |>
+      mutate("{predictor_var}" := fct_cross(!!!syms(predictor), sep = ":", keep_empty = FALSE))
+  }
+  
+  if (is.null(level_comparisons)) {
+    # default: all pairwise combinations of the RAW (unrecoded) levels
+    plain_data <- if (is_survey_data) data$variables else data
+    level_comparisons <- combn(levels(plain_data[[predictor_var]]), 2, simplify = FALSE)
+  }
+  
+  decorate_level <- function(level_string) {
+    parts <- str_split_1(level_string, fixed(":"))
+    paste(paste(predictor, parts, sep = " - "), collapse = ": ")
+  }
+  
+  prop_tests <- map_dfr(level_comparisons, \(pr) {
+    
+    data |>
+      filter(!!sym(predictor_var) %in% pr) |>
+      mutate(grp = as.numeric(!!sym(predictor_var) == pr[2]),
+             out_num = as.numeric(!!sym(outcome) == outcome_level)) %>%
+      safe_ttest(out_num ~ grp, ., is_categorical = TRUE) |>
+      mutate(comparison = paste(pr, collapse = " vs "), .before = 1)
+  }) |>
+    mutate(p_adj = p.adjust(p.value, method = p_adjust_method)) |>
+    select(comparison, estimate, p.value, p_adj) |>
+    mutate(
+      outcome   = outcome,
+      o_cat     = outcome_level,
+      predictor = predictor_label,
+      .before = 1
+    ) |>
+    mutate(
+      comparison_group_1 = map_chr(str_split_i(comparison, " vs ", 1), decorate_level),
+      comparison_group_2 = map_chr(str_split_i(comparison, " vs ", 2), decorate_level),
+      .after = comparison
+    ) |>
+    mutate(nest = nest_val, predictor = main_pred_val, .after = outcome) |>
+    select(-comparison)
+  
+  return(prop_tests)
+}
+
+```
+
+#### Examples
+
+```{r}
+
+pw_test_cats(outcome = "approve", 
+             predictor = "region", 
+             data = example_design, 
+             outcome_level = "Yes", 
+             # level_comparisons = level_comparisons
+             )
+
+```
+
+If you did request level comparisons, this is how - with a list containing vectors of length two, each vector element one of the groups to be compared.
+
+```{r}
+
+level_comparisons = list(c("East", "North"), c("East", "West"))
+
+pw_test_cats(outcome = "approve", 
+             predictor = "region", 
+             data = example_data, 
+             outcome_level = "Yes", 
+             level_comparisons = level_comparisons
+             )
+
+```
+
+<br>
+
+### Repeat pairwise testing across levels
+
+Because pw_test_cats deals only with one level of an outcome this function exists to map it across **all** the levels of an outcome.
+
+It also has an argument `outcome_levels` to allow you to request only certain levels of an outcome be tested.
+
+Again, it re-adjusts `p_adj` (Holm) across all comparisons for that predictor outcome pair, and also returns raw p-values - though as noted above, neither `p_adj` column ends up driving `sig_diff`; that happens later, in `merge_p_letters()`, via its own BH adjustment of the raw `p.value`.
+
+```{r}
+
+pw_test_cats_multi <- function(outcome, 
+                               outcome_levels = NULL, 
+                               predictor, 
+                               data,
+                               level_comparisons = NULL,
+                               p_adjust_method = "holm"
+                               ){
+  
+  if(is.null(outcome_levels)){
+    outcome_levels <- data %>% pull(outcome) %>% unique() %>% as.character()
+  }
+
+  map_dfr(outcome_levels, \(lvl) {
+    lvl_comparisons <- level_comparisons[[lvl]]
+    if (!is.null(level_comparisons) && is.null(lvl_comparisons)) {
+      warning("pw_test_cats_multi(): no level_comparisons entry named '", lvl,
+              "' - testing all pairwise combinations for this outcome level.")
+    }
+    
+    pw_test_cats(outcome = outcome, 
+                 outcome_level = lvl, 
+                 predictor = predictor,
+                 data = data, 
+                 level_comparisons = lvl_comparisons,
+                 p_adjust_method = p_adjust_method)
+  }) |>
+    # each call's own p_adj is only valid within that outcome level's
+    # comparisons - overwrite with one adjustment across every comparison
+    # from every level, matching what a reader of the combined table
+    # actually screens together
+    mutate(p_adj = p.adjust(p.value, method = p_adjust_method))
+}
+
+```
+
+#### Examples
+
+Requesting only particular outcome levels be tested...
+
+```{r}
+
+pw_test_cats_multi(outcome = "approve",
+             predictor = "region",
+             data = example_data,
+             outcome_levels = "Yes",
+             # level_comparisons = level_comparisons
+             )
+
+```
+
+Specifying particular predictor level comparisons for particular outcome levels.
+
+```{r}
+
+pw_test_cats_multi(outcome = "approve", 
+             predictor = "region", 
+             data = example_data,
+             # outcome_level = "Yes", 
+             level_comparisons = list(Yes = list(c("North", "South")), No = list(c("West", "East")))
+             )
+
+```
+
+Again, requesting only particular outcome levels be tested...
+
+```{r}
+
+pw_test_cats_multi(outcome = "region",
+             predictor = "approve",
+             data = example_data,
+             outcome_levels = c("North", "East")
+             )
+
+```
+
+<br>
+
+## Pairwise testing means
+
+The same as `pw_test_cats` but for means, and with no need for `pw_test_cats_multi` as mean variables do not have multiple levels to test in.
+
+```{r}
+
+pw_test_means <- function(outcome, predictor, data,
+                          level_comparisons = NULL){
+  
+  is_survey_data <- any(grepl("survey", class(data)))
+  
+  nested          <- length(predictor) > 1
+  predictor_label <- paste0(predictor, collapse = "_X_")
+  predictor_var   <- if (nested) predictor_label else predictor
+  
+  nest_val      <- if (nested) predictor[1] else NA_character_
+  main_pred_val <- if (nested) paste0(predictor[-1], collapse = "_X_") else predictor
+  
+  if (nested) {
+    data <- data |>
+      mutate(across(all_of(predictor), haven::as_factor)) |>
+      mutate("{predictor_var}" := fct_cross(!!!syms(predictor), sep = ":", keep_empty = FALSE))
+  }
+  
+  if (is.null(level_comparisons)) {
+    # default: all pairwise combinations of the RAW (unrecoded) levels
+    plain_data <- if (is_survey_data) data$variables else data
+    level_comparisons <- combn(levels(plain_data[[predictor_var]]), 2, simplify = FALSE)
+  }
+  
+  decorate_level <- function(level_string) {
+    parts <- str_split_1(level_string, fixed(":"))
+    paste(paste(predictor, parts, sep = " - "), collapse = ": ")
+  }
+  
+  mean_tests <- map_dfr(level_comparisons, \(pr) {
+    
+    data |>
+      filter(!!sym(predictor_var) %in% pr) |>
+      mutate(grp = as.numeric(!!sym(predictor_var) == pr[2]),
+             out_val = !!sym(outcome)) %>%
+      safe_ttest(out_val ~ grp, ., is_categorical = FALSE) |>
+      mutate(comparison = paste(pr, collapse = " vs "), .before = 1)
+  }) |>
+    mutate(p_adj = p.adjust(p.value, method = "holm")) |>
+    select(comparison, estimate, p.value, p_adj) |>
+    mutate(
+      outcome   = outcome,
+      o_cat     = "mean",
+      predictor = predictor_label,
+      .before = 1
+    ) |>
+    mutate(
+      comparison_group_1 = map_chr(str_split_i(comparison, " vs ", 1), decorate_level),
+      comparison_group_2 = map_chr(str_split_i(comparison, " vs ", 2), decorate_level),
+      .after = comparison
+    ) |>
+    mutate(nest = nest_val, predictor = main_pred_val, .after = outcome) |>
+    select(-comparison)
+  
+  return(mean_tests)
+}
+
+```
+
+### Examples
+
+```{r}
+pw_test_means(
+  outcome     = "score",
+  predictor   = "region",
+  data        = example_data
+)
+
+
+pw_test_means(
+  outcome     = "score",
+  predictor   = "region",
+  data        = example_data, 
+  level_comparisons = list(c("East", "North"))
+)
+```
+
+```{r}
+pw_test_means(
+  outcome     = "score",
+  predictor   = c("approve", "region"),
+  data        = example_data
+)
+```
+
+## Merging data back on
+
+Create some test data for this example...
+
+```{r}
+
+cs_df <- calc_stats(example_data, outcomes = "approve", predictors = list("region", "sex", c("region", "sex")),
+           statistics = "perc", conf = "se", pval = TRUE)
+cs_df
+
+pw_tests <- pw_test_cats_multi(data = example_data, outcome = "approve", predictor = "region")
+pw_tests
+
+```
+
+<br>
+
+### Letters predictor levels
+
+Add letters on to predictor levels.
+
+```{r}
+
+add_letters <- function(calc_stats_df){
+  
+  letter_codes <- c(letters, as.vector(t(outer(letters, letters, paste0))))[1:260]
+
+  cs_df_letters <- 
+    calc_stats_df %>% select(cross_break, contains("p_cat")) %>% unique %>% 
+    group_by(cross_break) %>% mutate(sig_letter = 
+      case_when(cross_break != "Total" ~ letter_codes[row_number()]), 
+      .after = cross_break)
+  
+  calc_stats_df <- full_join(calc_stats_df, cs_df_letters) %>% relocate(sig_letter, .after = cross_break)
+
+  calc_stats_df
+  
+}
+
+add_letters(cs_df)
+
+```
+
+### Function to merge on pairwise tests using letters
+
+This function then takes the output of pairwise testing for one predictor - outcome set and the `calc_stats` output - and prepares the pairwise testing output to be merged back on (creates comparable columns etc). It also filters the letters to be shown to a particular critical level, by default 0.05.
+
+```{r}
+
+merge_p_letters <- function(one_pw_test_set, calc_stats_df, crit_lev = 0.05){
+  
+  # Unique comparison groups
+  (groups <- c(one_pw_test_set$comparison_group_1, one_pw_test_set$comparison_group_2) %>% unique)
+  length(groups)
+  
+  # p-value adjustment - happens separately for each outcome within each predictor
+  (merge_prep1 <- 
+    one_pw_test_set %>% 
+     mutate(p_value = p.adjust(p.value, method = "BH")) 
+  )
+  
+  # Create a reference group to merge on to calc_stats() dataframe
+  (merge_prep2 <- map(groups, function(x){
+    merge_prep1 %>% filter(
+      comparison_group_1 %in% x | comparison_group_2 %in% x
+    ) %>% 
+      mutate(
+        ref_group = x, 
+        comparison = if_else(comparison_group_1 == x, comparison_group_2, comparison_group_1), 
+        .after = predictor) 
+  }) %>% bind_rows())
+  
+  # Next step differs depending on if table is nested or non nested
+  # No method for more than 2 predictors. 
+  not_nested <- merge_prep2 %>% pull(nest) %>% is.na() %>% all 
+  
+  # Broadly, splits comparison groups into columns that match calc_stats output
+  # For matching...
+  if(not_nested){
+    
+    merge_prep3 <- merge_prep2 %>% 
+      mutate(cross_break = predictor, .before = 1) %>% 
+      mutate(
+        p_cat1 = str_replace_all(ref_group, paste0(predictor, " - "), ""), 
+        p_cat2 = "Total", 
+        comparison_pcat1 = str_replace_all(comparison, paste0(predictor, " - "), ""),
+        comparison_pcat2 = "Total", 
+        group1 = p_cat1, group2 = comparison_pcat1,
+        .after = comparison
+      )
+  } else{
+    
+    merge_prep3 <- merge_prep2 %>% 
+      mutate(cross_break = paste0(nest, "_X_", predictor), .before = 1)  %>% 
+      mutate(
+        p_cat1 = str_replace_all(str_split_i(ref_group, ": ", 1), paste0(nest, " - "), ""), 
+        p_cat2 = str_replace_all(str_split_i(ref_group, ": ", 2), paste0(predictor, " - "), ""),
+        comparison_pcat1 = str_replace_all(str_split_i(comparison, ": ", 1), paste0(nest, " - "), ""),
+        comparison_pcat2 = str_replace_all(str_split_i(comparison, ": ", 2), paste0(predictor, " - "), ""),
+        group1 = paste0(p_cat1, "_X_", p_cat2), group2 = paste0(comparison_pcat1, "_X_", comparison_pcat2),
+        .after = comparison
+      ) 
+  }
+  
+  merge_prep3
+  
+  # Get letters from calc_stats output
+  has_p_cat2 <- "p_cat2" %in% names(calc_stats_df)
+  
+  letters_match <- calc_stats_df %>% 
+      filter(cross_break == merge_prep3$cross_break %>% unique) %>% 
+      mutate(group1 = if (has_p_cat2) {
+        str_replace_all(paste0(p_cat1, "_X_", p_cat2), "_X_Total", "")
+      } else {
+        p_cat1
+      }) %>%
+      select(cross_break, outcome, o_cat, group1, sig_letter, any_of("stat")) 
+    
+  letters_match
+  
+  letter_lookup <- letters_match$sig_letter %>% unique
+  names(letter_lookup) <- letters_match$group1 %>% unique
+  letter_lookup
+  
+  # Match letters to the pairwise test results
+  merge_prep4 <- full_join(merge_prep3, letters_match) %>% 
+    relocate(sig_letter, .after = cross_break) %>%
+    mutate(comparison_letter = letter_lookup[group2])
+  
+  merge_prep4
+  
+  # Only retain the number of p_cats that exist in calc_stats_df
+  # Used in any_of below
+  p_cats_in_cs_df <- calc_stats_df %>% select(contains("p_cat")) %>% names
+  
+  (ready_to_merge <- 
+      merge_prep4 %>% 
+      filter(p_value < crit_lev) %>% 
+      group_by(cross_break, sig_letter, outcome, o_cat, predictor, p_cat1, p_cat2, across(any_of("stat"))) %>% 
+      summarise(sig_diff = paste0(comparison_letter, collapse = ", "), .groups = "drop") %>% 
+      select(cross_break, outcome, sig_letter, any_of(p_cats_in_cs_df), o_cat, sig_diff, any_of("stat"))
+  )
+  
+  ready_to_merge
+  
+}
+
+```
+
+#### Examples
+
+```{r}
+cs_df <- add_letters(cs_df)
+merge_p_letters(one_pw_test_set = pw_tests, calc_stats_df = cs_df, crit_lev = 0.5)
+```
+
+```{r}
+
+pw_tests_nest <- pw_test_cats_multi(data = example_data, outcome = "approve", predictor = c("region", "sex"))
+pw_tests_nest
+merge_p_letters(one_pw_test_set = pw_tests_nest, calc_stats_df = cs_df, crit_lev = 0.5)
+
+```
+
+#### Nested example
+
+```{r}
+cs_df2 <- calc_stats(example_data, outcomes = "approve", predictors = list("region", "trust", "urban"),
+           statistics = "perc", conf = "se", pval = TRUE)
+
+cs_df2
+
+cs_df2 <- add_letters(cs_df2)
+
+
+pw_tests_sex <- pw_test_cats_multi(data = example_data, outcome = "approve", predictor = "urban")
+pw_tests_sex
+
+merge_p_letters(one_pw_test_set = pw_tests_sex, calc_stats_df = cs_df2)
+
+```
+
+## Apply pairwise over ALL required comparisons
+
+Finally, `pwtest_over_all_combinations` applies all the functions above over a set of requested outcome variables, predictor variables, and requested statistics.
+
+It also allows the user to provide a named list of outcome levels to specify particular levels of outcome variables for testing, reducing the total number of tests run. This would be requested like this.
+
+```{r, eval = F}
+all_outcome_levels = 
+    list(
+      sex = c("F"), 
+      trust = c("Yes", "No")
+    )
+
+```
+
+```{r}
+
+# Vector of outcomes
+# List of predictors
+# Vector of statistics
+# List of outcome levels to test [where categorical]
+
+pwtest_over_all_combinations <- function(
+    data,
+    outcome, 
+    predictor, 
+    statistics, 
+    all_outcome_levels = NULL,
+    crit_lev = 0.05
+    ){
+  results <- list()
+  
+  for(out in outcome){
+    
+    single_outcome <- data %>% pull(out)
+    if (is.factor(single_outcome))  outcome_statistic <- str_remove_all(statistics, "mean|median|sum|min|max|range|iqr|sd")
+    if (is.numeric(single_outcome)) outcome_statistic <- str_remove_all(statistics, "perc|count")
+    (pairwise_test_statistic <- intersect(c("w_mean", "w_perc", "mean", "perc"), outcome_statistic)[1])
+
+    is_survey_data <- any(str_detect(class(data), "survey"))
+    if (is.na(pairwise_test_statistic) ||
+        (str_detect(pairwise_test_statistic, "^w_") && !is_survey_data)) next
+
+    cur_data <- data
+    if (pairwise_test_statistic %in% c("mean", "perc") && is_survey_data) {
+      cur_data <- data[["variables"]]
+    }
+
+    if(is.null(all_outcome_levels)){cur_outcome_levels <- all_outcome_levels
+    } else { 
+      cur_outcome_levels <- all_outcome_levels[[out]]
+      if(length(cur_outcome_levels) == 0){cur_outcome_levels <- NULL}
+    }
+    
+    for(pred in predictor){
+      
+      test_result <- NULL
+      
+      if(is.numeric(single_outcome) & grepl("mean", pairwise_test_statistic)){
+        test_result <- tryCatch(
+          list(pw_test_means(outcome = out, predictor = pred, data = cur_data) %>%
+            mutate(stat = pairwise_test_statistic, o_cat = pairwise_test_statistic, crit_lev = crit_lev)),
+          error = function(e) {
+            warning("Pairwise test skipped for '", out, "' x '", paste(pred, collapse = "_X_"),
+                    "': ", conditionMessage(e), call. = FALSE)
+            NULL
+          }
+        )
+      }
+      
+      if(is.factor(single_outcome) & grepl("perc", pairwise_test_statistic)){
+        test_result <- tryCatch(
+          list(pw_test_cats_multi(outcome = out, predictor = pred, data = cur_data, 
+                                   outcome_levels = cur_outcome_levels) %>% 
+            mutate(stat = pairwise_test_statistic, crit_lev = crit_lev)),
+          error = function(e) {
+            warning("Pairwise test skipped for '", out, "' x '", paste(pred, collapse = "_X_"),
+                    "': ", conditionMessage(e), call. = FALSE)
+            NULL
+          }
+        )
+      }
+      
+      if (!is.null(test_result)) {
+        names(test_result) <- paste0(out, " X ", paste(pred, collapse = "_X_"))
+        results <- append(results, test_result)
+      }
+    }
+  }
+  results
+}
+
+```
+
+### Examples
+
+```{r}
+
+pw_tests <- pwtest_over_all_combinations(
+  data = example_data,
+  outcome = c("score", "sex", "trust"),
+  predictor = list("region", "urban"),
+  statistics = c("mean", "median", "perc"),
+  all_outcome_levels = 
+    list(
+      sex = c("F"), 
+      trust = c("Yes", "No")
+    )
+)
+
+pw_tests
+
+```
+
+And the accompanying `calc_stats` data frame...
+
+```{r}
+
+cs_df <- calc_stats(
+  data = example_data, 
+  outcomes = c("score", "sex", "trust"),
+  predictors =  list("region", "urban"),
+  statistics = c("mean", "perc")
+)
+
+cs_df
+
+```
+
+## Merge results back to calc_stats df
+
+These outputs are then merged back into `calc_stat`'s output
+
+```{r}
+
+# First letter identifiers are. added to the calc_stats data frame
+cs_df <- add_letters(cs_df)
+
+# The merge_p_letters is mapped across all the pairwise tests for that table
+ready_to_merge = map(pw_tests, ~merge_p_letters(.x, cs_df, crit_lev = 0.9)) %>% bind_rows
+
+# This returns a list of formatted, mergeable results
+ready_to_merge
+
+# These are then merged on with full_join. 
+(cs_df_merged <- full_join(cs_df, ready_to_merge) %>% 
+      mutate(sig_diff = case_when(cross_break != "Total" & is.na(sig_diff) ~ "-", TRUE ~ sig_diff))
+)
+  
+cs_df_merged 
+
+```
+
+<br>
+
+In calc_stats the steps above are bundled into one: a function called `add_pairwise_sig`
+
+```{r}
+
+dtab:::add_pairwise_sig(
+  merged_tables = cs_df, 
+  data = example_data, 
+  outcomes = c("score", "sex", "trust"),
+  predictors =  list("region", "urban"),
+  statistics = c("mean", "perc")
+  )
+
+```
