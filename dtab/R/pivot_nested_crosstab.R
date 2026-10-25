@@ -31,9 +31,13 @@
 # an otherwise-populated (outer, inner) combination (e.g. zero "Yes" among
 # Female/Old) no longer reaches this file at all - calc_stat_engine()'s
 # group_by(.drop = FALSE) on the outcome axis restores it as a real 0
-# upstream. The tidyr::complete() below still runs (for the Rectangularity
-# case above), it just has nothing left to fill in for this one - the row
-# already exists, so completion is a no-op rather than the active fix.
+# upstream. The o_cat-crossed skeleton below still runs (for the
+# Rectangularity case above), it just has nothing left to fill in for this
+# one - the row already exists, so completion is a no-op rather than the
+# active fix. The skeleton is built with distinct() + expand_grid() rather
+# than tidyr::complete(), which sorts and would override the row order
+# calc_stats() produced (alphabetical o_cat/outcome once o_cat is character,
+# as it is after multicode collapsing).
 # base still can't go through the same o_cat-crossed completion (a property
 # of the (outer, inner) group, not any o_cat level) - it's computed from the
 # grid directly, before that completion runs.
@@ -81,10 +85,28 @@ reshape_nested_predictor_set <- function(rows_for_set) {
     pivot_wider(names_from = col_key, values_from = base) %>%
     select(outcome, o_lab, all_of(col_order))
 
-  completed <- rows_for_set %>%
-    tidyr::complete(tidyr::nesting(outcome, o_lab, outcome_type, stat, o_cat), p_cat1, p_cat2) %>%
-    mutate(p_cat1 = factor(p_cat1, levels = outer_order),
-           p_cat2 = factor(p_cat2, levels = inner_order)) %>%
+  # Row skeleton: every (outcome, stat, o_cat) combination crossed with the
+  # full (outer, inner) grid. Deliberately NOT tidyr::complete()/nesting()/
+  # crossing(): those sort their output, so o_cat (and outcome) come back
+  # alphabetical whenever the column is character - which it is as soon as
+  # multicode collapsing has run (o_cat = right_stem, then bind_rows()
+  # coerces the whole column). distinct() and expand_grid() keep order of
+  # first appearance, i.e. the order calc_stats() produced, and every
+  # later step (pivot_wider, fct_inorder, group_split) just preserves it.
+  row_keys <- rows_for_set %>%
+    distinct(outcome, o_lab, outcome_type, stat, o_cat)
+  grid_keys <- grid %>% select(p_cat1, p_cat2)
+  skeleton_index <- tidyr::expand_grid(row = seq_len(nrow(row_keys)),
+                                       col = seq_len(nrow(grid_keys)))
+  skeleton <- bind_cols(row_keys[skeleton_index$row, ], grid_keys[skeleton_index$col, ])
+
+  completed <- skeleton %>%
+    left_join(
+      rows_for_set %>%
+        mutate(p_cat1 = factor(p_cat1, levels = outer_order),
+               p_cat2 = factor(p_cat2, levels = inner_order)),
+      by = c("outcome", "o_lab", "outcome_type", "stat", "o_cat", "p_cat1", "p_cat2")
+    ) %>%
     mutate(col_key = paste0(as.character(p_cat1), ": ", as.character(p_cat2)))
 
   has_ci <- "estimate_ci" %in% names(completed)

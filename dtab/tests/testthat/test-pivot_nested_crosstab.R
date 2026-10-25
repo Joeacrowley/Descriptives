@@ -906,3 +906,39 @@ test_that("20. format_nested_crosstab() still inserts a (blank) Sig. diff row wh
   }
 })
 
+
+
+# Regression test: row order must come from calc_stats(), not be re-sorted.
+# reshape_nested_predictor_set() used to go through tidyr::complete(), which
+# sorts. For a factor o_cat that happens to be harmless (sorted by level),
+# but once multicode collapsing has run o_cat is character - bind_rows()
+# coerces the whole column - so categories (and variables) came back
+# alphabetical. Deliberately non-alphabetical levels/options, single-code
+# variable first, then a multicode.
+test_that("20. pivot_nested_crosstab() keeps calc_stats() row order for categorical + multicoded variables (not alphabetical)", {
+  n <- 16
+  data <- tibble(
+    y = factor(rep(c("Low", "Medium", "High", "Medium"), length.out = n),
+                levels = c("Low", "Medium", "High")),
+    Q1_1 = factor(rep(c("Yes", "No", "Yes", "No"), length.out = n)),
+    Q1_2 = factor(rep(c("No", "Yes", "Yes", "No"), length.out = n)),
+    Q1_3 = factor(rep(c("No", "No", "Yes", "Yes"), length.out = n)),
+    sex       = factor(rep(c("Male", "Female"), each = n / 2), levels = c("Male", "Female")),
+    age_group = factor(rep(c("Young", "Old"), times = n / 2), levels = c("Young", "Old"))
+  )
+  attr(data$Q1_1, "label") <- "Q1: Zebra"
+  attr(data$Q1_2, "label") <- "Q1: Mango"
+  attr(data$Q1_3, "label") <- "Q1: Apple"
+
+  stats_table <- calc_stats(data, outcomes = c("y", "Q1_1", "Q1_2", "Q1_3"),
+                             predictors = list(c("sex", "age_group")),
+                             statistics = "perc", multicode = TRUE)
+
+  # The order calc_stats() itself produced for the Total rows
+  expected <- stats_table %>% filter(cross_break == "Total") %>% pull(o_cat) %>% as.character()
+  expect_equal(expected, c("Low", "Medium", "High", "Zebra", "Mango", "Apple"))
+
+  pivoted <- pivot_nested_crosstab(stats_table)[[1]]
+  got <- pivoted$Variable[pivoted$Variable %in% expected]
+  expect_equal(got, expected)
+})
