@@ -1,5 +1,5 @@
 # =============================================================================
-# Tests for the pairwise-testing machinery in calc_stats.R: safe_ttest(),
+# Tests for the pairwise-testing machinery in pairwise.R: safe_ttest(),
 # pw_test_cats()/pw_test_cats_multi(), pw_test_means(), add_letters(),
 # merge_p_letters(), pwtest_over_all_combinations(), add_pairwise_sig(), and
 # calc_stats(pairwise = TRUE) end-to-end. Replaces the old svyby/covmat-based
@@ -96,18 +96,27 @@ test_that("6. pwtest_over_all_combinations() skips an outcome with no pairwise-e
 })
 
 
-test_that("7. pwtest_over_all_combinations() catches a too-small comparison group, warns, and skips only that outcome", {
+# An untestable pair is kept, with an NA p-value and the reason in `method`,
+# rather than skipping the whole outcome with a warning.
+test_that("7. pwtest_over_all_combinations() keeps a too-small comparison as untested, with the reason in method", {
+  set.seed(1)
   tiny_data <- tibble(
     approve = factor(c(rep("No", 14), "Yes", rep("No", 8), rep("Yes", 7))),
     region  = factor(c(rep("Alpha", 15), rep("Beta", 15))),
     score   = rnorm(30, 50, 10)
   )
-  expect_warning(
+  expect_no_warning(
     results <- pwtest_over_all_combinations(data = tiny_data, outcome = c("approve", "score"),
-                                             predictor = list("region"), statistics = c("perc", "mean")),
-    "Pairwise test skipped"
+                                             predictor = list("region"), statistics = c("perc", "mean"))
   )
-  expect_equal(names(results), "score X region")
+  expect_equal(names(results), c("approve X region", "score X region"))
+
+  # approve: Alpha has only 1 "Yes", so not tested.
+  expect_true(all(is.na(results[["approve X region"]]$p.value)))
+  expect_true(all(str_detect(results[["approve X region"]]$method, "not testable")))
+
+  # score: tested as normal.
+  expect_false(any(is.na(results[["score X region"]]$p.value)))
 })
 
 
@@ -141,7 +150,7 @@ test_that("10. merge_p_letters() correctly flags a flat 3-level predictor - Sout
                        levels = c("North", "South", "East"))
   )
   cs <- calc_stats(data, outcomes = "response", predictors = "region",
-                    statistics = "perc", conf = "se", multicode = FALSE) %>% add_letters()
+                    statistics = "perc", conf = "se") %>% add_letters()
   pw <- pw_test_cats_multi(outcome = "response", predictor = "region", data = data) %>%
     mutate(stat = "perc")
 
@@ -171,7 +180,7 @@ test_that("11. merge_p_letters() keys correctly on a nested predictor set (p_cat
     age_group = factor(rep(c(rep("Young", 20), rep("Old", 20)), 2))
   )
   cs <- calc_stats(data, outcomes = "response", predictors = list(c("sex", "age_group")),
-                    statistics = "perc", conf = "se", multicode = FALSE) %>% add_letters()
+                    statistics = "perc", conf = "se") %>% add_letters()
   pw <- pw_test_cats_multi(outcome = "response", predictor = c("sex", "age_group"), data = data) %>%
     mutate(stat = "perc")
 
@@ -196,7 +205,7 @@ test_that("12. merge_p_letters() keeps perc and w_perc as separate rows via the 
   design <- data %>% srvyr::as_survey_design(ids = 1, weights = wt)
 
   cs <- calc_stats(design, outcomes = "response", predictors = "region",
-                    statistics = c("perc", "w_perc"), conf = "se", multicode = FALSE) %>% add_letters()
+                    statistics = c("perc", "w_perc"), conf = "se") %>% add_letters()
 
   pw_u <- pw_test_cats_multi(outcome = "response", predictor = "region", data = data) %>% mutate(stat = "perc")
   pw_w <- pw_test_cats_multi(outcome = "response", predictor = "region", data = design) %>% mutate(stat = "w_perc")
@@ -248,7 +257,7 @@ test_that("15. calc_stats(pairwise = TRUE) populates sig_letter/sig_diff for a f
                        levels = c("North", "South", "East"))
   )
   result <- calc_stats(data, outcomes = "response", predictors = "region",
-                        statistics = "perc", conf = "se", multicode = FALSE, pairwise = TRUE)
+                        statistics = "perc", conf = "se", pairwise = TRUE)
 
   region_rows <- result %>% filter(cross_break == "region")
   total_rows  <- result %>% filter(cross_break == "Total")
@@ -271,7 +280,7 @@ test_that("16. calc_stats(pairwise = TRUE) works end-to-end on a nested (2-varia
     age_group = factor(rep(c(rep("Young", 20), rep("Old", 20)), 2))
   )
   result <- calc_stats(data, outcomes = "response", predictors = list(c("sex", "age_group")),
-                        statistics = "perc", conf = "se", multicode = FALSE, pairwise = TRUE)
+                        statistics = "perc", conf = "se", pairwise = TRUE)
 
   expect_true("p_cat2" %in% names(result))
   yes_rows <- result %>% filter(o_cat == "Yes", cross_break == "sex_X_age_group")
@@ -286,7 +295,7 @@ test_that("17. calc_stats(pairwise = TRUE) works end-to-end for a numeric mean o
     region = factor(c(rep("North", 20), rep("South", 20)), levels = c("North", "South"))
   )
   result <- calc_stats(data, outcomes = "score", predictors = "region",
-                        statistics = "mean", conf = "se", multicode = FALSE, pairwise = TRUE)
+                        statistics = "mean", conf = "se", pairwise = TRUE)
 
   region_rows <- result %>% filter(cross_break == "region")
   expect_equal(length(unique(region_rows$sig_letter)), 2)
@@ -308,7 +317,7 @@ test_that("19. calc_stats(pairwise = TRUE, pw_outcome_levels = ...) restricts wh
     region   = factor(c(rep("North", 20), rep("South", 20)))
   )
   result <- calc_stats(data, outcomes = "response", predictors = "region", statistics = "perc",
-                        conf = "se", multicode = FALSE, pairwise = TRUE,
+                        conf = "se", pairwise = TRUE,
                         pw_outcome_levels = list(response = "Yes"))
 
   no_rows  <- result %>% filter(cross_break == "region", o_cat == "No")
@@ -326,9 +335,9 @@ test_that("20. calc_stats(pairwise = TRUE, pw_crit_lev = ...) a stricter thresho
     region   = factor(c(rep("North", 20), rep("South", 20)))
   )
   loose <- calc_stats(data, outcomes = "response", predictors = "region", statistics = "perc",
-                       conf = "se", multicode = FALSE, pairwise = TRUE, pw_crit_lev = 0.5)
+                       conf = "se", pairwise = TRUE, pw_crit_lev = 0.5)
   strict <- calc_stats(data, outcomes = "response", predictors = "region", statistics = "perc",
-                        conf = "se", multicode = FALSE, pairwise = TRUE, pw_crit_lev = 1e-10)
+                        conf = "se", pairwise = TRUE, pw_crit_lev = 1e-10)
 
   loose_diff  <- loose  %>% filter(cross_break == "region", o_cat == "Yes") %>% pull(sig_diff)
   strict_diff <- strict %>% filter(cross_break == "region", o_cat == "Yes") %>% pull(sig_diff)
@@ -347,9 +356,9 @@ test_that("21. calc_stats(pairwise = TRUE) mixing perc and w_perc in one call ke
   design <- data %>% srvyr::as_survey_design(ids = 1, weights = wt)
 
   without_pairwise <- calc_stats(design, outcomes = "response", predictors = "region",
-                                  statistics = c("perc", "w_perc"), conf = "se", multicode = FALSE)
+                                  statistics = c("perc", "w_perc"), conf = "se")
   with_pairwise <- calc_stats(design, outcomes = "response", predictors = "region",
-                               statistics = c("perc", "w_perc"), conf = "se", multicode = FALSE,
+                               statistics = c("perc", "w_perc"), conf = "se",
                                pairwise = TRUE)
 
   expect_equal(nrow(with_pairwise), nrow(without_pairwise))

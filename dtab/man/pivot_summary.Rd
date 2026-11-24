@@ -12,9 +12,8 @@ pivot_summary(data)
 \value{
 A list: \code{pivoted} (the reshaped tibble, with \code{row_type},
 \code{stat_code}, \code{block_id}, and \code{is_variable_row} metadata columns) and
-\code{bases} (footnote text from \code{base_description}, via
-\code{prepare_base_for_table()}). Pass this list straight to
-\code{\link[=format_summary]{format_summary()}}.
+\code{bases} (footnote lines from the \code{o_base}/\code{p_baseN} columns, via
+\code{summarise_bases()}). Pass this list straight to \code{\link[=format_summary]{format_summary()}}.
 }
 \description{
 Collapses Variable and Levels into a single "Variable" column: a numeric

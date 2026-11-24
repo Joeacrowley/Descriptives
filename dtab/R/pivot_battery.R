@@ -77,6 +77,12 @@ find_common_stem <- function(labels, min_length = 25) {
 #' @keywords internal
 pivot_battery <- function(data) {
 
+  # A multicoded question's options are separate outcomes; multicode_group
+  # holds the question. Use it as the outcome so the options share one table.
+  if ("multicode_group" %in% names(data)) {
+    data <- data %>% mutate(outcome = coalesce(multicode_group, outcome)) %>% select(-multicode_group)
+  }
+
   if ("cross_break" %in% names(data) && !all(data$cross_break == "Total")) {
     stop("pivot_battery() has no room for a predictor - every row must be cross_break == \"Total\". ",
          "Call calc_stats() with predictors = NULL, or use pivot_crosstab() instead.")

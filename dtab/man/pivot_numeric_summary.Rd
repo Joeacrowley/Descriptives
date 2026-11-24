@@ -26,8 +26,8 @@ statistic that has one (\code{data} must then be a survey design object).
 \code{min}/\code{max}/\code{range} have no weighted equivalent and are returned
 unweighted regardless.}
 
-\item{base}{Optional base/filter expression, passed through to
-\code{\link[=calc_stats]{calc_stats()}}.}
+\item{base}{A single string, or made with \code{\link[=base_information]{base_information()}}, passed
+to \code{\link[=calc_stats]{calc_stats()}}.}
 }
 \value{
 A list: \code{pivoted} (one row per variable, one column per

@@ -14,7 +14,8 @@
 #' any of those three functions (or their `format_*()` partners) directly.
 #'
 #' @param data A data frame, or survey design object.
-#' @param outcomes Character vector of outcome variable names.
+#' @param outcomes Character vector of outcome variable names, or `NULL`
+#'   if `multicode` gives them all.
 #' @param predictors `NULL` for a Total-only summary, a single variable
 #'   name or list of variable names for a flat crosstab (one or more
 #'   side-by-side predictor blocks), or `list(c(<outer>, <inner>))` for a
@@ -24,9 +25,11 @@
 #' @param statistics Character vector of statistic codes, passed to
 #'   [calc_stats()].
 #' @param conf `NULL`, `"se"`, or `"ci"`, passed to [calc_stats()].
-#' @param base Optional base/filter expression, passed to [calc_stats()].
-#' @param pval Optional p-value method, passed to [calc_stats()].
-#' @param multicode Passed to [calc_stats()].
+#' @param base A single string, or made with [base_information()], passed
+#'   to [calc_stats()].
+#' @param pval If `TRUE`, adds p-values, passed to [calc_stats()].
+#' @param multicode `NULL`, or a list of multicoded questions, passed to
+#'   [calc_stats()].
 #' @param pairwise If `TRUE`, passed to [calc_stats()] - runs letter-based
 #'   pairwise significance testing across predictor levels and adds the
 #'   legend block/Sig. diff row wherever there's a predictor to compare
@@ -38,6 +41,8 @@
 #'   If `FALSE`, stops after the pivot step and returns the matching
 #'   `pivot_*()` function's own list output untouched (no digit formatting
 #'   or presentation-only rows), for further computation.
+#' @param ... Other [calc_stats()] arguments, e.g. `numeric_test`,
+#'   `pw_adjust`.
 #'
 #' @return A styled `huxtable`, or (if `formatted = FALSE`) the list
 #'   returned by whichever `pivot_*()` function was dispatched to.
@@ -45,9 +50,9 @@
 #' @seealso [calc_stats()], [pivot_summary()], [pivot_crosstab()],
 #'   [pivot_nested_crosstab()]
 #' @export
-make_table <- function(data, outcomes, predictors = NULL, statistics = c("count", "mean"),
-                        conf = NULL, base = NULL, pval = NULL, multicode = TRUE,
-                        pairwise = FALSE, formatted = TRUE) {
+make_table <- function(data, outcomes = NULL, predictors = NULL, statistics = c("count", "mean"),
+                        conf = NULL, base = NULL, pval = FALSE, multicode = NULL,
+                        pairwise = FALSE, formatted = TRUE, ...) {
 
   # Normalise the same way calc_stats() itself does.
   predictors_list <- if (is.null(predictors)) {
@@ -95,8 +100,11 @@ make_table <- function(data, outcomes, predictors = NULL, statistics = c("count"
     "crosstab"
   }
 
-  stats_table <- calc_stats(data, outcomes, predictors, statistics, conf, base, pval, multicode,
-                             pairwise)
+  # By name, so a change in calc_stats()'s argument order can't mix them up.
+  # Anything else (numeric_test, pw_adjust, ...) goes through `...`.
+  stats_table <- calc_stats(data, outcomes = outcomes, predictors = predictors,
+                             statistics = statistics, conf = conf, base = base,
+                             pval = pval, multicode = multicode, pairwise = pairwise, ...)
 
   pivot_result <- switch(table_type,
     summary         = pivot_summary(stats_table),

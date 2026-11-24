@@ -101,7 +101,7 @@ test_that("1. pivot_nested_crosstab() builds one composite column per (outer, in
                         levels = c("Young", "Old"))
   )
   stats_table <- calc_stats(data, outcomes = "age", predictors = list(c("sex", "age_group")),
-                             statistics = "mean", multicode = FALSE)
+                             statistics = "mean")
   result <- pivot_nested_crosstab(stats_table)
   pivoted     <- result[[1]]
   col_order   <- result[[3]]
@@ -130,7 +130,7 @@ test_that("2. pivot_nested_crosstab() keeps a rectangular column set even when o
     # No Female/Old rows at all - that combination has zero respondents.
   )
   stats_table <- calc_stats(data, outcomes = "age", predictors = list(c("sex", "age_group")),
-                             statistics = "mean", multicode = FALSE)
+                             statistics = "mean")
   result <- pivot_nested_crosstab(stats_table)
   pivoted   <- result[[1]]
   col_order <- result[[3]]
@@ -149,13 +149,14 @@ test_that("2. pivot_nested_crosstab() keeps a rectangular column set even when o
 
 test_that("3. pivot_nested_crosstab() rejects data without a nested predictor set", {
   data <- tibble(age = c(1, 2, 3, 4), sex = factor(c("Male", "Male", "Female", "Female")))
-  stats_table <- calc_stats(data, outcomes = "age", predictors = "sex", statistics = "mean", multicode = FALSE)
+  stats_table <- calc_stats(data, outcomes = "age", predictors = "sex", statistics = "mean")
 
   expect_error(pivot_nested_crosstab(stats_table), "nested predictor set")
 })
 
 
-test_that("4. pivot_nested_crosstab() rejects more than one statistic on a categorical variable", {
+test_that("4. pivot_nested_crosstab() shows a categorical variable with two statistics under one label row", {
+  # Every sex x age_group cell has one Yes and one No -> 50%, count 1.
   data <- tibble(
     y         = factor(c("Yes", "No", "Yes", "No", "Yes", "No", "Yes", "No")),
     sex       = factor(c("Male", "Male", "Male", "Male", "Female", "Female", "Female", "Female"),
@@ -164,9 +165,35 @@ test_that("4. pivot_nested_crosstab() rejects more than one statistic on a categ
                         levels = c("Young", "Old"))
   )
   stats_table <- calc_stats(data, outcomes = "y", predictors = list(c("sex", "age_group")),
-                             statistics = c("perc", "count"), multicode = FALSE)
+                             statistics = c("perc", "count"))
+  result <- pivot_nested_crosstab(stats_table)[[1]]
 
-  expect_error(pivot_nested_crosstab(stats_table), "only supports one statistic")
+  expect_equal(result$Variable, c("y", "No", "Yes", "No", "Yes", "Sample sizes", "y"))
+  expect_equal(result$Statistics, c(NA, "%", "%", "Count", "Count", NA, NA))
+  expect_equal(result[["Male: Young"]], c(NA, 0.5, 0.5, 1, 1, NA, 2))
+})
+
+
+# perc and w_perc (or mean and w_mean) come from different tests, so each
+# keeps its own p-value. perc and count come from the same test, so they
+# share one.
+test_that("4b. pivot_nested_crosstab() keeps a separate p-value per test type when several statistics are requested", {
+  set.seed(1)
+  n <- 400
+  data <- tibble(
+    sex = factor(sample(c("Male", "Female"), n, TRUE)),
+    grp = factor(sample(c("A", "B"), n, TRUE)),
+    x   = rnorm(n) + (grp == "A"),
+    w   = runif(n, 0.5, 2)
+  )
+  design <- srvyr::as_survey_design(data, weights = w)
+  stats_table <- calc_stats(design, outcomes = "x", predictors = list(c("sex", "grp")),
+                             statistics = c("mean", "w_mean"), pval = TRUE)
+  result <- pivot_nested_crosstab(stats_table)[[1]]
+
+  p_col <- "p_value (grp | Male)"
+  expect_false(is.na(result[[p_col]][result$Statistics %in% "Mean"]))
+  expect_false(is.na(result[[p_col]][result$Statistics %in% "Mean (w)"]))
 })
 
 
@@ -190,7 +217,7 @@ test_that("5. pivot_nested_crosstab() handles a categorical variable with label 
     age_group = factor(rep(c("Young", "Old", "Young", "Old"), each = 4), levels = c("Young", "Old"))
   )
   stats_table <- calc_stats(data, outcomes = "y", predictors = list(c("sex", "age_group")),
-                             statistics = "perc", multicode = FALSE)
+                             statistics = "perc")
   result <- pivot_nested_crosstab(stats_table)
   pivoted <- result[[1]]
 
@@ -214,7 +241,7 @@ test_that("6. format_nested_crosstab() builds the 4-row nested header with corre
                         levels = c("Young", "Old"))
   )
   stats_table <- calc_stats(data, outcomes = "age", predictors = list(c("sex", "age_group")),
-                             statistics = "mean", multicode = FALSE)
+                             statistics = "mean")
   result <- format_nested_crosstab(pivot_nested_crosstab(stats_table))
 
   male_young_col   <- which(names(result) == "Male: Young")
@@ -289,7 +316,7 @@ test_that("7. format_nested_crosstab() inserts an SE row under each Mean row, wi
                         levels = c("Young", "Old"))
   )
   stats_table <- calc_stats(data, outcomes = "age", predictors = list(c("sex", "age_group")),
-                             statistics = "mean", conf = "se", multicode = FALSE)
+                             statistics = "mean", conf = "se")
   result <- format_nested_crosstab(pivot_nested_crosstab(stats_table))
 
   mean_row <- which(result[["Statistics"]] == "Mean")
@@ -320,7 +347,7 @@ test_that("8. format_nested_crosstab() inserts a 95% CI row, formatted as a rang
                         levels = c("Young", "Old"))
   )
   stats_table <- calc_stats(data, outcomes = "age", predictors = list(c("sex", "age_group")),
-                             statistics = "mean", conf = "ci", multicode = FALSE)
+                             statistics = "mean", conf = "ci")
   result <- format_nested_crosstab(pivot_nested_crosstab(stats_table))
   print(result %>% huxtable::as_flextable())
 
@@ -350,9 +377,12 @@ test_that("9. pivot_nested_crosstab() attaches one p-value column per outer leve
                         levels = c("Male", "Female")),
     age_group = factor(c("Young", "Young", "Old", "Old", "Young", "Young", "Old", "Old"),
                         levels = c("Young", "Old"))
-  )
+  ) %>%
+    # Each row 5 times, so each sex x age_group cell has 10 cases (groups
+    # under 10 aren't tested for p-values).
+    slice(rep(1:n(), each = 5))
   stats_table <- calc_stats(data, outcomes = "age", predictors = list(c("sex", "age_group")),
-                             statistics = "mean", pval = TRUE, multicode = FALSE)
+                             statistics = "mean", pval = TRUE)
 
   expect_true(any(!is.na(stats_table$p_value)))
 
@@ -400,7 +430,7 @@ test_that("10. pivot_nested_crosstab() handles multiple outcomes together, each 
                         levels = c("Young", "Old"))
   )
   stats_table <- calc_stats(data, outcomes = c("age", "score"), predictors = list(c("sex", "age_group")),
-                             statistics = "mean", multicode = FALSE)
+                             statistics = "mean")
   result    <- pivot_nested_crosstab(stats_table)
   pivoted   <- result[[1]]
   col_order <- result[[3]]
@@ -439,9 +469,12 @@ test_that("11. format_nested_crosstab() folds each outer level's p-value column 
                         levels = c("Male", "Female")),
     age_group = factor(c("Young", "Young", "Old", "Old", "Young", "Young", "Old", "Old"),
                         levels = c("Young", "Old"))
-  )
+  ) %>%
+    # Each row 5 times, so each sex x age_group cell has 10 cases (groups
+    # under 10 aren't tested for p-values).
+    slice(rep(1:n(), each = 5))
   stats_table <- calc_stats(data, outcomes = "age", predictors = list(c("sex", "age_group")),
-                             statistics = "mean", pval = TRUE, multicode = FALSE)
+                             statistics = "mean", pval = TRUE)
   result <- format_nested_crosstab(pivot_nested_crosstab(stats_table))
   print(result %>% huxtable::as_flextable())
 
@@ -485,7 +518,7 @@ test_that("12. pivot_nested_crosstab() relocates every variable's Base row into 
   # so requesting both together is exactly how a real mixed-type call would
   # look, not a special case this test has to work around.
   stats_table <- calc_stats(data, outcomes = c("age", "result"), predictors = list(c("sex", "age_group")),
-                             statistics = c("mean", "perc"), multicode = FALSE)
+                             statistics = c("mean", "perc"))
   result  <- pivot_nested_crosstab(stats_table)
   pivoted <- result[[1]]
 
@@ -529,7 +562,7 @@ test_that("13. format_nested_crosstab() still separates two adjacent NUMERIC var
                         levels = c("Young", "Old"))
   )
   stats_table <- calc_stats(data, outcomes = c("age", "score"), predictors = list(c("sex", "age_group")),
-                             statistics = "mean", multicode = FALSE)
+                             statistics = "mean")
   result <- format_nested_crosstab(pivot_nested_crosstab(stats_table))
 
   # top_padding() as a huxtable accessor - same lower-confidence flag as
@@ -632,9 +665,9 @@ test_that("14. pivot_nested_crosstab() carries a legend and __sigdiff columns on
   design <- build_nested_pairwise_design()
 
   with_pairwise <- calc_stats(design, outcomes = "y", predictors = list(c("sex", "age_group")),
-                               statistics = "w_perc", conf = "se", multicode = FALSE, pairwise = TRUE)
+                               statistics = "w_perc", conf = "se", pairwise = TRUE)
   without_pairwise <- calc_stats(design, outcomes = "y", predictors = list(c("sex", "age_group")),
-                                  statistics = "w_perc", conf = "se", multicode = FALSE, pairwise = FALSE)
+                                  statistics = "w_perc", conf = "se", pairwise = FALSE)
 
   result_with    <- pivot_nested_crosstab(with_pairwise)
   result_without <- pivot_nested_crosstab(without_pairwise)
@@ -652,7 +685,7 @@ test_that("15. format_nested_crosstab() shows a legend row right under the 4-row
   design <- build_nested_pairwise_design()
 
   stats_table <- calc_stats(design, outcomes = "y", predictors = list(c("sex", "age_group")),
-                             statistics = "w_perc", conf = "se", multicode = FALSE, pairwise = TRUE)
+                             statistics = "w_perc", conf = "se", pairwise = TRUE)
   pivot_result <- pivot_nested_crosstab(stats_table)
   legend       <- pivot_result[[6]]
   result       <- format_nested_crosstab(pivot_result)
@@ -712,7 +745,7 @@ test_that("16. format_nested_crosstab() renders a fuller, weighted, pairwise + p
   ) %>% srvyr::as_survey_design(ids = 1, weights = wt)
 
   stats_table <- calc_stats(design, outcomes = "approve", predictors = list(c("sex", "age_group")),
-                             statistics = "w_perc", conf = "se", pval = TRUE, multicode = FALSE, pairwise = TRUE)
+                             statistics = "w_perc", conf = "se", pval = TRUE, pairwise = TRUE)
   result <- format_nested_crosstab(pivot_nested_crosstab(stats_table))
   print(result %>% huxtable::as_flextable())
 
@@ -758,9 +791,9 @@ test_that("17. pivot_nested_crosstab() carries a legend and __sigdiff columns fo
   design <- build_nested_mean_design()
 
   with_pairwise <- calc_stats(design, outcomes = "score", predictors = list(c("sex", "age_group")),
-                               statistics = "w_mean", conf = "se", multicode = FALSE, pairwise = TRUE)
+                               statistics = "w_mean", conf = "se", pairwise = TRUE)
   without_pairwise <- calc_stats(design, outcomes = "score", predictors = list(c("sex", "age_group")),
-                                  statistics = "w_mean", conf = "se", multicode = FALSE, pairwise = FALSE)
+                                  statistics = "w_mean", conf = "se", pairwise = FALSE)
 
   result_with    <- pivot_nested_crosstab(with_pairwise)
   result_without <- pivot_nested_crosstab(without_pairwise)
@@ -778,7 +811,7 @@ test_that("18. format_nested_crosstab() shows a legend row, a Sig. diff row, and
   design <- build_nested_mean_design()
 
   stats_table <- calc_stats(design, outcomes = "score", predictors = list(c("sex", "age_group")),
-                             statistics = "w_mean", conf = "se", multicode = FALSE, pairwise = TRUE)
+                             statistics = "w_mean", conf = "se", pairwise = TRUE)
   pivot_result <- pivot_nested_crosstab(stats_table)
   legend       <- pivot_result[[6]]
   result       <- format_nested_crosstab(pivot_result)
@@ -827,7 +860,7 @@ test_that("19. format_nested_crosstab() renders a fuller, weighted, pairwise + p
   ) %>% srvyr::as_survey_design(ids = 1, weights = wt)
 
   stats_table <- calc_stats(design, outcomes = "score", predictors = list(c("sex", "age_group")),
-                             statistics = "w_mean", conf = "se", pval = TRUE, multicode = FALSE, pairwise = TRUE)
+                             statistics = "w_mean", conf = "se", pval = TRUE, pairwise = TRUE)
   result <- format_nested_crosstab(pivot_nested_crosstab(stats_table))
   print(result %>% huxtable::as_flextable())
 
@@ -870,7 +903,7 @@ test_that("20. format_nested_crosstab() still inserts a (blank) Sig. diff row wh
   ) %>% srvyr::as_survey_design(ids = 1, weights = wt)
 
   stats_table <- calc_stats(design, outcomes = "y", predictors = list(c("sex", "age_group")),
-                             statistics = "w_perc", conf = "se", multicode = FALSE, pairwise = TRUE)
+                             statistics = "w_perc", conf = "se", pairwise = TRUE)
 
   # Confirm the premise: genuinely tested, genuinely null - restricted to
   # the 4 real nested combinations (cross_break != "Total"). calc_stats()
@@ -930,9 +963,9 @@ test_that("20. pivot_nested_crosstab() keeps calc_stats() row order for categori
   attr(data$Q1_2, "label") <- "Q1: Mango"
   attr(data$Q1_3, "label") <- "Q1: Apple"
 
-  stats_table <- calc_stats(data, outcomes = c("y", "Q1_1", "Q1_2", "Q1_3"),
+  stats_table <- calc_stats(data, outcomes = "y",
                              predictors = list(c("sex", "age_group")),
-                             statistics = "perc", multicode = TRUE)
+                             statistics = "perc", multicode = list(c("Q1_1", "Q1_2", "Q1_3")))
 
   # The order calc_stats() itself produced for the Total rows
   expected <- stats_table %>% filter(cross_break == "Total") %>% pull(o_cat) %>% as.character()

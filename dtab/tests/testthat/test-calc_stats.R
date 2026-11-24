@@ -1,51 +1,40 @@
 # =============================================================================
-# KNOWN-ANSWER TESTS for calc_stats.R
-# I have NOT run these myself — I don't have R available in this environment
-# (no root/sudo access to install it), so these are unverified. Run them on
-# your machine with:
-#   testthat::test_file("tests/testthat/test-calc_stats.R"), or devtools::test()
+# KNOWN-ANSWER TESTS for calc_stats() and its pieces
 # Where hand-calculation is practical, each test builds a tiny synthetic
 # dataset small enough that the "correct" answer is worked out by hand in a
 # comment above it, rather than trusting either the old or new code. Where
 # hand-calculation isn't practical (bootstrap CIs, chi-square/Kruskal-Wallis
 # p-values), the test checks structure and plausibility instead (right method
 # chosen, p in [0,1], NA where NA is expected) rather than an exact number.
-# 44 tests, organised by what they cover:
-#   1-3   unweighted_mean      (total, grouped, conf = NULL behaviour)
-#   4-5   weighted_mean        (total, grouped)
-#   6-7   unweighted_median    (small-subgroup NA-CI fix, conf = "se" sanity)
-#   8     weighted_median      (the easy case — survey_median has vartype built in)
-#   9-10  unweighted_sum       (total, grouped)
-#   11    weighted_sum
-#   12-13 unweighted_perc      (total, grouped)
-#   14-15 weighted_perc        (known proportion, discrepancy #1 fix)
-#   16-17 unweighted_count     (discrepancy #2 fix, total case)
-#   18    weighted_count
+# The single stats are run through calc_stat_engine(data, outcome, predictors,
+# stat, conf), the outer function calc_stats() uses for each statistic.
+# 45 tests, organised by what they cover:
+#   1-3   mean                 (total, grouped, conf = NULL behaviour)
+#   4-5   w_mean               (total, grouped)
+#   6-7   median               (small-subgroup NA-CI, conf = "se" sanity)
+#   8     w_median
+#   9-10  sum                  (total, grouped)
+#   11    w_sum
+#   12-13 perc                 (total, grouped)
+#   14-15 w_perc               (known proportion, discrepancy #1 fix)
+#   16-17 count                (discrepancy #2 fix, total case)
+#   18    w_count
 #   19-23 calc_stats()         (statistic-type filtering, Total labelling,
 #                                multiple predictor sets, nested predictors,
 #                                validation errors)
-#   24-27 significance tests   (all 4 test functions via return_pvalues(),
-#                                nested-predictor p-value skip)
+#   24-27 significance tests   (return_pvalues(), weighted and unweighted,
+#                                flat and nested predictor sets)
 #   28    list_depth() / pluck_depth() convention
-#   29    input validation helpers + common_prefix()
-#   30    base_information() / create_bases()
-#   31    weighted_median()/weighted_sum() correctly zap_labels() on a real
-#         haven_labelled column (discrepancy #6) — added after the fact, on
-#         top of the 30-test cap, specifically because tests 8 and 11 use
-#         plain numeric columns and wouldn't have caught this
+#   29    input validation helpers
+#   30    base_information() -> o_base
+#   31    w_median / w_sum on a real haven_labelled column (discrepancy #6)
 #   32-35 outcome_type stamping (numeric / categorical / multicoded)
-#   36-42 min/max/range/iqr/sd  (unweighted_min/max/range/iqr/sd,
-#                                weighted_iqr/weighted_sd — point estimates
-#                                only, per the "point estimates only" decision
-#                                for this first pass)
-#   43    calc_stats() only computes the new numeric-only stats for numeric
-#         outcomes, same filtering logic as test 19 but for the new names
-#   44    calc_stats() computes shared p-values for mean+sd together,
-#         confirming stat_labels/pval-trigger were actually extended to
-#         cover the new stats, not just calc_stats()'s registry
+#   36-42 min/max/range/iqr/sd, w_iqr/w_sd (point estimates only)
+#   43    calc_stats() only computes the numeric-only stats for numeric
+#         outcomes, same filtering logic as test 19
+#   44    calc_stats() computes shared p-values for mean+sd together
 #   45    calc_stats() doesn't crash when pval = TRUE and every predictor
-#         set is nested (regression test for a real crash caught by
-#         pivot_nested_crosstab.R's own test suite)
+#         set is nested
 # =============================================================================
 
 
@@ -57,9 +46,9 @@
 # deviations from 15: -5, 5, -5, 5 -> sum of squares = 100 -> var = 100/3 = 33.3333
 # sd = 5.773503 -> se = sd/sqrt(4) = 2.886751
 
-test_that("1. unweighted_mean matches a hand-calculated mean and SE (total only)", {
+test_that("1. 'mean' stat matches a hand-calculated mean and SE (total only)", {
   data <- tibble(x = c(10, 20, 10, 20))
-  result <- unweighted_mean(data, outcomes = "x", conf = "se")
+  result <- calc_stat_engine(data, outcome = "x", stat = "mean", conf = "se")
 
   expect_equal(result$estimate, 15)
   expect_equal(result$base, 4)
@@ -71,12 +60,12 @@ test_that("1. unweighted_mean matches a hand-calculated mean and SE (total only)
 # Group A: x = 10, 20, 10, 20 -> same as test 1: mean = 15
 # Group B: x = 30, 30         -> mean = 30, sd = 0 -> se = 0
 
-test_that("2. unweighted_mean matches hand-calculated group means", {
+test_that("2. 'mean' stat matches hand-calculated group means", {
   data <- tibble(
     x = c(10, 20, 10, 20, 30, 30),
     g = factor(c("A", "A", "A", "A", "B", "B"))
   )
-  result <- unweighted_mean(data, outcomes = "x", predictors = list("g"), conf = "se")
+  result <- calc_stat_engine(data, outcome = "x", stat = "mean", predictors = list("g"), conf = "se")
 
   group_a <- result %>% filter(p_cat1 == "A")
   group_b <- result %>% filter(p_cat1 == "B")
@@ -87,12 +76,11 @@ test_that("2. unweighted_mean matches hand-calculated group means", {
 })
 
 
-test_that("3. conf = NULL blanks the SE and drops the CI-bound columns", {
+test_that("3. conf = NULL drops the SE and CI columns", {
   data <- tibble(x = c(1, 2, 3, 4, 5))
-  result <- unweighted_mean(data, outcomes = "x")   # conf defaults to NULL
+  result <- calc_stat_engine(data, outcome = "x", stat = "mean")   # conf defaults to NULL
 
-  expect_equal(result$estimate_se, "-")
-  expect_false(any(c("estimate_low", "estimate_upp") %in% names(result)))
+  expect_false(any(c("estimate_se", "estimate_low", "estimate_upp", "estimate_ci") %in% names(result)))
 })
 
 
@@ -104,10 +92,10 @@ test_that("3. conf = NULL blanks the SE and drops the CI-bound columns", {
 #   = (10*1 + 20*1 + 10*2 + 20*2) / (1+1+2+2) = 90/6 = 15
 # (same example used earlier to explain "known answer synthetic data")
 
-test_that("4. weighted_mean matches a hand-calculated weighted average", {
+test_that("4. 'w_mean' stat matches a hand-calculated weighted average", {
   svy <- tibble(x = c(10, 20, 10, 20), w = c(1, 1, 2, 2)) %>%
     as_survey_design(weight = w)
-  result <- weighted_mean(svy, outcomes = "x")
+  result <- calc_stat_engine(svy, outcome = "x", stat = "w_mean")
 
   expect_equal(result$estimate, 15)
 })
@@ -116,14 +104,14 @@ test_that("4. weighted_mean matches a hand-calculated weighted average", {
 # Group A: x = 10, 20, weights 1, 1 -> weighted mean = 15
 # Group B: x = 30, 40, weights 1, 1 -> weighted mean = 35
 
-test_that("5. weighted_mean matches hand-calculated weighted group means", {
+test_that("5. 'w_mean' stat matches hand-calculated weighted group means", {
   svy <- tibble(
     x = c(10, 20, 30, 40),
     w = c(1, 1, 1, 1),
     g = factor(c("A", "A", "B", "B"))
   ) %>% as_survey_design(weight = w)
 
-  result <- weighted_mean(svy, outcomes = "x", predictors = list("g"))
+  result <- calc_stat_engine(svy, outcome = "x", stat = "w_mean", predictors = list("g"))
 
   expect_equal(result %>% filter(p_cat1 == "A") %>% pull(estimate), 15)
   expect_equal(result %>% filter(p_cat1 == "B") %>% pull(estimate), 35)
@@ -140,13 +128,13 @@ test_that("5. weighted_mean matches hand-calculated weighted group means", {
 # Medians are exact regardless of the CI: small = median(1,2,3) = 2,
 # big = median(1..8) = 4.5.
 
-test_that("6. unweighted_median renders a dropped small-subgroup CI as real NA", {
+test_that("6. 'median' stat renders a dropped small-subgroup CI as real NA", {
   set.seed(123)
   median_data <- tibble(
     g = factor(c(rep("small", 3), rep("big", 8))),
     x = c(1, 2, 3, 1, 2, 3, 4, 5, 6, 7, 8)
   )
-  result <- unweighted_median(median_data, outcomes = "x", predictors = list("g"), conf = "ci")
+  result <- calc_stat_engine(median_data, outcome = "x", stat = "median", predictors = list("g"), conf = "ci")
 
   small_row <- result %>% filter(p_cat1 == "small")
   big_row   <- result %>% filter(p_cat1 == "big")
@@ -163,9 +151,9 @@ test_that("6. unweighted_median renders a dropped small-subgroup CI as real NA",
 # this only checks the point estimate exactly and the SE for being a sane
 # positive number, not medianse()'s specific formula.
 
-test_that("7. unweighted_median total case: exact median, sane SE", {
+test_that("7. 'median' stat total case: exact median, sane SE", {
   data <- tibble(x = c(1, 2, 3, 4, 5, 100))
-  result <- unweighted_median(data, outcomes = "x", conf = "se")
+  result <- calc_stat_engine(data, outcome = "x", stat = "median", conf = "se")
 
   expect_equal(result$estimate, 3.5)
   expect_true(is.numeric(result$estimate_se))
@@ -179,10 +167,10 @@ test_that("7. unweighted_median total case: exact median, sane SE", {
 # values, so the weighted median is unambiguously 30 regardless of exactly
 # how survey_median() interpolates.
 
-test_that("8. weighted_median matches a hand-calculated weighted median", {
+test_that("8. 'w_median' stat matches a hand-calculated weighted median", {
   svy <- tibble(x = c(10, 20, 30, 40, 50), w = c(1, 1, 20, 1, 1)) %>%
     as_survey_design(weight = w)
-  result <- weighted_median(svy, outcomes = "x")
+  result <- calc_stat_engine(svy, outcome = "x", stat = "w_median")
 
   expect_equal(result$estimate, 30)
 })
@@ -196,9 +184,9 @@ test_that("8. weighted_median matches a hand-calculated weighted median", {
 # deviations: -7.5,-2.5,2.5,7.5 -> sum of squares = 125 -> var = 125/3 = 41.6667
 # sd = 6.454972 -> se = sd * sqrt(n) = 6.454972 * 2 = 12.909944
 
-test_that("9. unweighted_sum matches a hand-calculated total and SE (total only)", {
+test_that("9. 'sum' stat matches a hand-calculated total and SE (total only)", {
   data <- tibble(x = c(5, 10, 15, 20))
-  result <- unweighted_sum(data, outcomes = "x", conf = "se")
+  result <- calc_stat_engine(data, outcome = "x", stat = "sum", conf = "se")
 
   expect_equal(result$estimate, 50)
   expect_equal(result$base, 4)
@@ -210,12 +198,12 @@ test_that("9. unweighted_sum matches a hand-calculated total and SE (total only)
 # Group B: x = 100,200    -> sum = 300, sd = sqrt(5000) = 70.710678
 #          se = sd * sqrt(2) = sqrt(5000)*sqrt(2) = sqrt(10000) = 100 exactly
 
-test_that("10. unweighted_sum matches hand-calculated group totals", {
+test_that("10. 'sum' stat matches hand-calculated group totals", {
   data <- tibble(
     x = c(5, 10, 15, 20, 100, 200),
     g = factor(c("A", "A", "A", "A", "B", "B"))
   )
-  result <- unweighted_sum(data, outcomes = "x", predictors = list("g"), conf = "se")
+  result <- calc_stat_engine(data, outcome = "x", stat = "sum", predictors = list("g"), conf = "se")
 
   group_a <- result %>% filter(p_cat1 == "A")
   group_b <- result %>% filter(p_cat1 == "B")
@@ -231,9 +219,9 @@ test_that("10. unweighted_sum matches hand-calculated group totals", {
 # (equal weight-1 makes this equivalent to a plain sum, avoiding any
 # ambiguity about survey_total()'s scaling)
 
-test_that("11. weighted_sum matches a hand-calculated weighted total", {
+test_that("11. 'w_sum' stat matches a hand-calculated weighted total", {
   svy <- tibble(x = c(10, 20, 30), w = c(1, 1, 1)) %>% as_survey_design(weight = w)
-  result <- weighted_sum(svy, outcomes = "x")
+  result <- calc_stat_engine(svy, outcome = "x", stat = "w_sum")
 
   expect_equal(result$estimate, 60)
 })
@@ -246,9 +234,9 @@ test_that("11. weighted_sum matches a hand-calculated weighted total", {
 # 3 "Yes" out of 10 rows -> estimate = 0.3
 # se = sqrt(0.3 * 0.7 / 10) = sqrt(0.021) = 0.1449138
 
-test_that("12. unweighted_perc matches a hand-calculated proportion and SE", {
+test_that("12. 'perc' stat matches a hand-calculated proportion and SE", {
   data <- tibble(y = factor(c(rep("Yes", 3), rep("No", 7))))
-  result <- unweighted_perc(data, outcomes = "y", conf = "se")
+  result <- calc_stat_engine(data, outcome = "y", stat = "perc", conf = "se")
 
   yes_row <- result %>% filter(o_cat == "Yes")
 
@@ -260,12 +248,12 @@ test_that("12. unweighted_perc matches a hand-calculated proportion and SE", {
 # Group A: 4 Yes out of 10 -> 0.4
 # Group B: 8 Yes out of 10 -> 0.8
 
-test_that("13. unweighted_perc matches hand-calculated group proportions", {
+test_that("13. 'perc' stat matches hand-calculated group proportions", {
   data <- tibble(
     g = factor(c(rep("A", 10), rep("B", 10))),
     y = factor(c(rep("Yes", 4), rep("No", 6), rep("Yes", 8), rep("No", 2)))
   )
-  result <- unweighted_perc(data, outcomes = "y", predictors = list("g"), conf = "se")
+  result <- calc_stat_engine(data, outcome = "y", stat = "perc", predictors = list("g"), conf = "se")
 
   expect_equal(result %>% filter(p_cat1 == "A", o_cat == "Yes") %>% pull(estimate), 0.4)
   expect_equal(result %>% filter(p_cat1 == "B", o_cat == "Yes") %>% pull(estimate), 0.8)
@@ -275,10 +263,10 @@ test_that("13. unweighted_perc matches hand-calculated group proportions", {
 # y = Yes,Yes,No,No,No with weights 2,2,1,1,1 -> total weight = 7, Yes weight = 4
 # proportion = 4/7 = 0.5714286
 
-test_that("14. weighted_perc matches a hand-calculated weighted proportion", {
+test_that("14. 'w_perc' stat matches a hand-calculated weighted proportion", {
   svy <- tibble(y = factor(c("Yes", "Yes", "No", "No", "No")), w = c(2, 2, 1, 1, 1)) %>%
     as_survey_design(weight = w)
-  result <- weighted_perc(svy, outcomes = "y")
+  result <- calc_stat_engine(svy, outcome = "y", stat = "w_perc")
 
   expect_equal(result %>% filter(o_cat == "Yes") %>% pull(estimate), 4 / 7, tolerance = 1e-6)
 })
@@ -289,14 +277,14 @@ test_that("14. weighted_perc matches a hand-calculated weighted proportion", {
 # overwritten with the group's total base (6), which is what the original
 # weighted_perc.R did before this fix.
 
-test_that("15. weighted_perc keeps the real per-category unweighted_n (discrepancy #1)", {
+test_that("15. 'w_perc' stat keeps the real per-category unweighted_n (discrepancy #1)", {
   svy <- tibble(
     g = factor(c(rep("A", 6), rep("B", 6))),
     y = factor(c(rep("Yes", 2), rep("No", 4), rep("Yes", 3), rep("No", 3))),
     w = rep(1, 12)
   ) %>% as_survey_design(weight = w)
 
-  result <- weighted_perc(svy, outcomes = "y", predictors = list("g"))
+  result <- calc_stat_engine(svy, outcome = "y", stat = "w_perc", predictors = list("g"))
   row <- result %>% filter(p_cat1 == "A", o_cat == "Yes")
 
   expect_equal(row$unweighted_n, 2)   # would have been 6 under the old buggy behaviour
@@ -317,13 +305,13 @@ test_that("15. weighted_perc keeps the real per-category unweighted_n (discrepan
 #             prop = 2/30 = 0.06667 -> se = sqrt(10*0.06667*0.93333) = 0.7888
 # This test checks the corrected value; the original would have failed it.
 
-test_that("16. unweighted_count uses base, not sum(base), for the proportion (discrepancy #2)", {
+test_that("16. 'count' stat uses base, not sum(base), for the proportion (discrepancy #2)", {
   count_data <- tibble(
     g = factor(c(rep("A", 10), rep("B", 10))),
     y = factor(c(rep("cat1", 2), rep("cat2", 3), rep("cat3", 5),
                  rep("cat1", 4), rep("cat2", 4), rep("cat3", 2)))
   )
-  result <- unweighted_count(count_data, outcomes = "y", predictors = list("g"), conf = "se")
+  result <- calc_stat_engine(count_data, outcome = "y", stat = "count", predictors = list("g"), conf = "se")
 
   row <- result %>% filter(p_cat1 == "A", o_cat == "cat1")
 
@@ -336,9 +324,9 @@ test_that("16. unweighted_count uses base, not sum(base), for the proportion (di
 # y = Yes(4), No(6) -> Yes: estimate = 4, base = 10, prop = 0.4
 # se = sqrt(base*prop*(1-prop)) = sqrt(10*0.4*0.6) = sqrt(2.4) = 1.549193
 
-test_that("17. unweighted_count matches a hand-calculated total-case count and SE", {
+test_that("17. 'count' stat matches a hand-calculated total-case count and SE", {
   data <- tibble(y = factor(c(rep("Yes", 4), rep("No", 6))))
-  result <- unweighted_count(data, outcomes = "y", conf = "se")
+  result <- calc_stat_engine(data, outcome = "y", stat = "count", conf = "se")
 
   yes_row <- result %>% filter(o_cat == "Yes")
 
@@ -350,10 +338,10 @@ test_that("17. unweighted_count matches a hand-calculated total-case count and S
 
 # y = Yes,Yes,No with weights 2,3,5 -> weighted count of "Yes" = 2+3 = 5
 
-test_that("18. weighted_count matches a hand-calculated weighted total", {
+test_that("18. 'w_count' stat matches a hand-calculated weighted total", {
   svy <- tibble(y = factor(c("Yes", "Yes", "No")), w = c(2, 3, 5)) %>%
     as_survey_design(weight = w)
-  result <- weighted_count(svy, outcomes = "y")
+  result <- calc_stat_engine(svy, outcome = "y", stat = "w_count")
 
   expect_equal(result %>% filter(o_cat == "Yes") %>% pull(estimate), 5)
 })
@@ -376,8 +364,7 @@ test_that("19. calc_stats() only computes statistics valid for each outcome's ty
     group       = factor(c("A", "A", "B", "B", "A", "B"))
   )
   result <- calc_stats(data, outcomes = c("outcome_num", "outcome_cat"),
-                        predictors = "group", statistics = c("mean", "perc"),
-                        multicode = FALSE)
+                        predictors = "group", statistics = c("mean", "perc"))
 
   expect_equal(result %>% filter(outcome == "outcome_num") %>% pull(stat) %>% unique(), "mean")
   expect_equal(result %>% filter(outcome == "outcome_cat") %>% pull(stat) %>% unique(), "perc")
@@ -386,7 +373,7 @@ test_that("19. calc_stats() only computes statistics valid for each outcome's ty
 
 test_that("20. calc_stats() labels cross_break as 'Total' when no predictors are given", {
   data <- tibble(outcome_num = c(1, 2, 3, 4, 5))
-  result <- calc_stats(data, outcomes = "outcome_num", statistics = "mean", multicode = FALSE)
+  result <- calc_stats(data, outcomes = "outcome_num", statistics = "mean")
 
   expect_equal(unique(result$cross_break), "Total")
 })
@@ -399,7 +386,7 @@ test_that("21. calc_stats() breaks down by each predictor set separately when gi
     group2 = factor(c("X", "X", "Y", "Y", "X", "X", "Y", "Y"))
   )
   result <- calc_stats(data, outcomes = "outcome_num", predictors = list("group1", "group2"),
-                        statistics = "mean", multicode = FALSE)
+                        statistics = "mean")
 
   # An overall "Total" row is always included alongside whatever predictor
   # breakdowns are requested (same source as test 20's Total-only case,
@@ -417,7 +404,7 @@ test_that("22. calc_stats() builds a combined nested breakdown when a predictor 
     group2 = factor(c("X", "X", "Y", "Y", "X", "X", "Y", "Y"))
   )
   result <- calc_stats(data, outcomes = "outcome_num", predictors = list(c("group1", "group2")),
-                        statistics = "mean", multicode = FALSE)
+                        statistics = "mean")
 
   expect_true("group1_X_group2" %in% result$cross_break)
   expect_true(all(c("predictor1", "predictor2", "p_cat1", "p_cat2") %in% names(result)))
@@ -437,7 +424,7 @@ test_that("23. calc_stats() rejects invalid inputs with the expected messages", 
   )
   expect_error(
     calc_stats(data, outcomes = "outcome_num", predictors = list("numeric_var"), statistics = "mean"),
-    "Not all predictors are factor variables"
+    "Predictors must be factors, characters, logicals or labelled"
   )
   expect_error(
     calc_stats(data, outcomes = "not_a_real_column", predictors = list("group"), statistics = "mean"),
@@ -454,6 +441,9 @@ test_that("23. calc_stats() rejects invalid inputs with the expected messages", 
 # significance tests
 # =============================================================================
 
+# Groups smaller than 10 aren't tested (p_method says "Not tested: ..."), so
+# every test group below has at least 10 cases.
+
 test_that("24. return_pvalues() dispatches to the chi-square test for an unweighted factor outcome", {
   data <- tibble(
     g = factor(rep(c("A", "B"), each = 10)),
@@ -468,8 +458,8 @@ test_that("24. return_pvalues() dispatches to the chi-square test for an unweigh
 
 test_that("25. return_pvalues() dispatches to a numeric-outcome test for an unweighted numeric outcome", {
   data <- tibble(
-    g = factor(rep(c("A", "B"), each = 6)),
-    x = c(1, 2, 3, 4, 5, 6, 20, 21, 22, 23, 24, 25)
+    g = factor(rep(c("A", "B"), each = 10)),
+    x = c(1:10, 20:29)
   )
   result <- return_pvalues(data, outcome = "x", predictor = "g")
 
@@ -480,19 +470,19 @@ test_that("25. return_pvalues() dispatches to a numeric-outcome test for an unwe
 
 test_that("26. return_pvalues() runs the weighted tests without error and returns valid p-values", {
   svy_cat <- tibble(
-    g = factor(rep(c("A", "B"), each = 6)),
-    y = factor(c(rep("Yes", 5), "No", rep("No", 5), "Yes")),
-    w = rep(1, 12)
+    g = factor(rep(c("A", "B"), each = 10)),
+    y = factor(c(rep("Yes", 8), rep("No", 2), rep("No", 8), rep("Yes", 2))),
+    w = rep(1, 20)
   ) %>% as_survey_design(weight = w)
   cat_result <- return_pvalues(svy_cat, outcome = "y", predictor = "g")
 
-  expect_equal(unique(cat_result$p_method), "Chi-Square test")
+  expect_equal(unique(cat_result$p_method), "Rao-Scott Chi-Square test")
   expect_true(all(cat_result$p_value >= 0 & cat_result$p_value <= 1))
 
   svy_num <- tibble(
-    g = factor(rep(c("A", "B"), each = 6)),
-    x = c(1, 2, 3, 4, 5, 6, 20, 21, 22, 23, 24, 25),
-    w = rep(1, 12)
+    g = factor(rep(c("A", "B"), each = 10)),
+    x = c(1:10, 20:29),
+    w = rep(1, 20)
   ) %>% as_survey_design(weight = w)
   num_result <- return_pvalues(svy_num, outcome = "x", predictor = "g")
 
@@ -514,13 +504,14 @@ test_that("26. return_pvalues() runs the weighted tests without error and return
 
 test_that("27. calc_stats() computes p-values for both a single-variable predictor and a nested one in the same call", {
   data <- tibble(
-    outcome_num = c(10, 20, 30, 40, 50, 60, 70, 80),
-    group1 = factor(c("A", "A", "A", "A", "B", "B", "B", "B")),
-    group2 = factor(c("X", "X", "Y", "Y", "X", "X", "Y", "Y"))
+    # 10 per group1 x group2 cell, so every group can be tested.
+    outcome_num = c(1:10, 21:30, 5:14, 31:40),
+    group1 = factor(rep(c("A", "B"), each = 20)),
+    group2 = factor(rep(rep(c("X", "Y"), each = 10), 2))
   )
   result <- calc_stats(data, outcomes = "outcome_num",
                         predictors = list("group1", c("group1", "group2")),
-                        statistics = "mean", pval = TRUE, multicode = FALSE)
+                        statistics = "mean", pval = TRUE)
 
   single_var_rows <- result %>% filter(cross_break == "group1")
   nested_rows     <- result %>% filter(cross_break == "group1_X_group2")
@@ -544,7 +535,7 @@ test_that("28. list_depth() still returns 1 for a flat predictor list, not for a
 })
 
 
-test_that("29. input validation helpers return the correct TRUE/FALSE, and common_prefix() finds the shared stem", {
+test_that("29. input validation helpers return the correct TRUE/FALSE", {
   data <- tibble(x = 1:5, g = factor(c("A", "B", "A", "B", "A")))
 
   expect_true(vars_exist(variable_list = list("x", "g"), data = data))
@@ -555,29 +546,23 @@ test_that("29. input validation helpers return the correct TRUE/FALSE, and commo
 
   expect_true(outcomes_not_in_predictors(outcomes = "x", predictors = list("g")))
   expect_false(outcomes_not_in_predictors(outcomes = "x", predictors = list("x")))
-
-  expect_equal(common_prefix(c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC")), "Q1_Option")
 })
 
 
-# base_information()/create_bases(): "x" has a specific base description,
-# "g" falls back to the general one. The exact label text appended after
-# ":-" depends on labelled::var_label()'s null_action = "fill" behaviour
-# (falls back to the variable name), which isn't this file's logic to
-# re-verify — so this checks the dispatch (which base applies to which
-# variable), via the part that IS this file's logic, with str_starts()
-# rather than an exact string match.
+# base_information(): "x" has a specific base description, "g" falls back
+# to the general one. calc_stats() puts each outcome's base in o_base.
 
-test_that("30. create_bases() picks the specific base for one variable and the general one for another", {
+test_that("30. base_information() gives the specific base for one variable and the general one for another", {
   data <- tibble(x = c(1, 2, 3), g = c(4, 5, 6))
   base_info <- base_information(
     data = data,
     general_base = "Asked of all respondents",
     specific_bases = c(x = "Self-completion questionnaire")
   )
+  result <- calc_stats(data, outcomes = c("x", "g"), statistics = "mean", base = base_info)
 
-  expect_true(str_starts(create_bases(base_info = base_info, variables = "x"), "Self-completion questionnaire:-"))
-  expect_true(str_starts(create_bases(base_info = base_info, variables = "g"), "Asked of all respondents:-"))
+  expect_equal(result %>% filter(outcome == "x") %>% pull(o_base), "Self-completion questionnaire")
+  expect_equal(result %>% filter(outcome == "g") %>% pull(o_base), "Asked of all respondents")
 })
 
 
@@ -592,7 +577,7 @@ test_that("30. create_bases() picks the specific base for one variable and the g
 # (a no-op) instead of x's actual values, leaving the haven_labelled class on
 # the column when it reached survey_median()/survey_total().
 
-test_that("31. weighted_median() and weighted_sum() zap_labels() on the outcome's values, not its name (discrepancy #6)", {
+test_that("31. 'w_median' and 'w_sum' stats zap_labels() on the outcome's values, not its name (discrepancy #6)", {
   labelled_x <- haven::labelled(c(10, 20, 30, 40, 50), label = "A haven-labelled continuous variable")
   data <- tibble(x = labelled_x, w = c(1, 1, 1, 1, 1))
 
@@ -600,8 +585,8 @@ test_that("31. weighted_median() and weighted_sum() zap_labels() on the outcome'
 
   svy <- data %>% as_survey_design(weight = w)
 
-  expect_equal(weighted_median(svy, outcomes = "x")$estimate, 30)
-  expect_equal(weighted_sum(svy, outcomes = "x")$estimate, 150)
+  expect_equal(calc_stat_engine(svy, outcome = "x", stat = "w_median")$estimate, 30)
+  expect_equal(calc_stat_engine(svy, outcome = "x", stat = "w_sum")$estimate, 150)
 })
 
 
@@ -611,14 +596,14 @@ test_that("31. weighted_median() and weighted_sum() zap_labels() on the outcome'
 
 test_that("32. calc_stats() stamps outcome_type = 'numeric' for a numeric outcome", {
   data <- tibble(age = c(20, 25, 30, 35, 40))
-  result <- calc_stats(data, outcomes = "age", statistics = "mean", multicode = FALSE)
+  result <- calc_stats(data, outcomes = "age", statistics = "mean")
 
   expect_equal(unique(result$outcome_type), "numeric")
 })
 
 test_that("33. calc_stats() stamps outcome_type = 'categorical' for an ordinary categorical outcome", {
   data <- tibble(gender = factor(c("Male", "Female", "Male", "Female", "Male")))
-  result <- calc_stats(data, outcomes = "gender", statistics = "perc", multicode = FALSE)
+  result <- calc_stats(data, outcomes = "gender", statistics = "perc")
 
   expect_equal(unique(result$outcome_type), "categorical")
 })
@@ -641,14 +626,13 @@ test_that("34. convert_multicodes() stamps outcome_type = 'multicoded' for a rea
   attr(data$Q1_OptionB, "label") <- "Q1: Option B"
   attr(data$Q1_OptionC, "label") <- "Q1: Option C"
 
-  result <- calc_stats(data, outcomes = c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC"),
-                        statistics = "perc", multicode = TRUE)
+  result <- calc_stats(data, statistics = "perc",
+                        multicode = list(c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC")))
 
-  # Collapsed into one variable ("Q1_Option", the common prefix - same
-  # helper checked directly in test 29) with one row per original option,
+  # One question (multicode_group "multicode1") with one row per option,
   # not three separate single-code variables.
   expect_equal(nrow(result), 3)
-  expect_equal(unique(result$outcome), "Q1_Option")
+  expect_equal(unique(result$multicode_group), "multicode1")
   expect_equal(unique(result$o_lab), "Q1")
   expect_setequal(result$o_cat, c("Option A", "Option B", "Option C"))
 
@@ -684,13 +668,13 @@ test_that("35. outcome_type stays 'multicoded' when a predictor breakdown is als
   attr(data$Q1_OptionB, "label") <- "Q1: Option B"
   attr(data$Q1_OptionC, "label") <- "Q1: Option C"
 
-  result <- calc_stats(data, outcomes = c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC"),
-                        predictors = "sex", statistics = "perc", multicode = TRUE)
+  result <- calc_stats(data, predictors = "sex", statistics = "perc",
+                        multicode = list(c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC")))
 
-  # Still collapsed to one variable, across both the Total rows and the
-  # Male/Female breakdown rows - 3 options x (Total + Male + Female) = 9 rows.
+  # Still one question, across both the Total rows and the Male/Female
+  # breakdown rows - 3 options x (Total + Male + Female) = 9 rows.
   expect_equal(nrow(result), 9)
-  expect_equal(unique(result$outcome), "Q1_Option")
+  expect_equal(unique(result$multicode_group), "multicode1")
   expect_equal(unique(result$o_lab), "Q1")
   expect_setequal(result$o_cat, c("Option A", "Option B", "Option C"))
   expect_true(all(result$outcome_type == "multicoded"))
@@ -706,34 +690,34 @@ test_that("35. outcome_type stays 'multicoded' when a predictor breakdown is als
 # Same dataset reused across tests 36-38 (one function each), same shape as
 # the mean/sum grouped tests above.
 
-test_that("36. unweighted_min matches hand-calculated group minimums", {
+test_that("36. 'min' stat matches hand-calculated group minimums", {
   data <- tibble(
     x = c(3, 7, 1, 9, 5),
     g = factor(c("A", "A", "B", "B", "B"))
   )
-  result <- unweighted_min(data, outcomes = "x", predictors = list("g"))
+  result <- calc_stat_engine(data, outcome = "x", stat = "min", predictors = list("g"))
 
   expect_equal(result %>% filter(p_cat1 == "A") %>% pull(estimate), 3)
   expect_equal(result %>% filter(p_cat1 == "B") %>% pull(estimate), 1)
 })
 
-test_that("37. unweighted_max matches hand-calculated group maximums", {
+test_that("37. 'max' stat matches hand-calculated group maximums", {
   data <- tibble(
     x = c(3, 7, 1, 9, 5),
     g = factor(c("A", "A", "B", "B", "B"))
   )
-  result <- unweighted_max(data, outcomes = "x", predictors = list("g"))
+  result <- calc_stat_engine(data, outcome = "x", stat = "max", predictors = list("g"))
 
   expect_equal(result %>% filter(p_cat1 == "A") %>% pull(estimate), 7)
   expect_equal(result %>% filter(p_cat1 == "B") %>% pull(estimate), 9)
 })
 
-test_that("38. unweighted_range matches hand-calculated group ranges (max - min)", {
+test_that("38. 'range' stat matches hand-calculated group ranges (max - min)", {
   data <- tibble(
     x = c(3, 7, 1, 9, 5),
     g = factor(c("A", "A", "B", "B", "B"))
   )
-  result <- unweighted_range(data, outcomes = "x", predictors = list("g"))
+  result <- calc_stat_engine(data, outcome = "x", stat = "range", predictors = list("g"))
 
   expect_equal(result %>% filter(p_cat1 == "A") %>% pull(estimate), 4)
   expect_equal(result %>% filter(p_cat1 == "B") %>% pull(estimate), 8)
@@ -744,9 +728,9 @@ test_that("38. unweighted_range matches hand-calculated group ranges (max - min)
 # (2 + 0.75*(3-2) = 2.75), Q3 at position 6.25 (6 + 0.25*(7-6) = 6.25)
 # -> IQR = 6.25 - 2.75 = 3.5, matching base R's IQR().
 
-test_that("39. unweighted_iqr matches a hand-calculated IQR (base R's type-7 quantile)", {
+test_that("39. 'iqr' stat matches a hand-calculated IQR (base R's type-7 quantile)", {
   data <- tibble(x = c(1, 2, 3, 4, 5, 6, 7, 8))
-  result <- unweighted_iqr(data, outcomes = "x")
+  result <- calc_stat_engine(data, outcome = "x", stat = "iqr")
 
   expect_equal(result$estimate, 3.5)
 })
@@ -770,9 +754,9 @@ test_that("39. unweighted_iqr matches a hand-calculated IQR (base R's type-7 qua
 # about survey_quantile()'s interpolation matching base R's IQR() hasn't
 # changed.
 
-test_that("40. weighted_iqr runs and returns a plausible point estimate, with no SE/CI columns", {
+test_that("40. 'w_iqr' stat runs and returns a plausible point estimate, with no SE/CI columns", {
   svy <- tibble(x = c(1, 2, 3, 4, 5, 6, 7, 8), w = rep(1, 8)) %>% as_survey_design(weight = w)
-  result <- weighted_iqr(svy, outcomes = "x")
+  result <- calc_stat_engine(svy, outcome = "x", stat = "w_iqr")
 
   expect_true(is.numeric(result$estimate))
   expect_true(result$estimate > 0 && is.finite(result$estimate))
@@ -784,9 +768,9 @@ test_that("40. weighted_iqr runs and returns a plausible point estimate, with no
 # sum of squares = 9+1+1+1+0+0+4+16 = 32 -> sample var = 32/7 = 4.571429
 # sample sd = sqrt(4.571429) = 2.138090 (R's sd() uses the n-1 divisor)
 
-test_that("41. unweighted_sd matches a hand-calculated sample standard deviation", {
+test_that("41. 'sd' stat matches a hand-calculated sample standard deviation", {
   data <- tibble(x = c(2, 4, 4, 4, 5, 5, 7, 9))
-  result <- unweighted_sd(data, outcomes = "x")
+  result <- calc_stat_engine(data, outcome = "x", stat = "sd")
 
   expect_equal(result$estimate, 2.138090, tolerance = 1e-5)
 })
@@ -796,9 +780,9 @@ test_that("41. unweighted_sd matches a hand-calculated sample standard deviation
 # base R's var() gives, so sqrt(survey_var()) should land on the same 2.138090
 # - not independently re-derived here, just checked against test 41's figure.
 
-test_that("42. weighted_sd matches unweighted_sd's figure under equal weights", {
+test_that("42. 'w_sd' stat matches the 'sd' figure under equal weights", {
   svy <- tibble(x = c(2, 4, 4, 4, 5, 5, 7, 9), w = rep(1, 8)) %>% as_survey_design(weight = w)
-  result <- weighted_sd(svy, outcomes = "x")
+  result <- calc_stat_engine(svy, outcome = "x", stat = "w_sd")
 
   expect_equal(result$estimate, 2.138090, tolerance = 1e-4)
 })
@@ -820,8 +804,7 @@ test_that("43. calc_stats() only computes min/max/sd for the numeric outcome, no
     group       = factor(c("A", "A", "B", "B", "A"))
   )
   result <- calc_stats(data, outcomes = c("outcome_num", "outcome_cat"),
-                        predictors = "group", statistics = c("min", "max", "sd", "perc"),
-                        multicode = FALSE)
+                        predictors = "group", statistics = c("min", "max", "sd", "perc"))
 
   expect_setequal(result %>% filter(outcome == "outcome_num") %>% pull(stat) %>% unique(),
                    c("min", "max", "sd"))
@@ -847,11 +830,11 @@ test_that("43. calc_stats() only computes min/max/sd for the numeric outcome, no
 
 test_that("44. calc_stats() computes a shared, non-NA p-value for mean and sd together", {
   data <- tibble(
-    outcome_num = c(1, 2, 3, 4, 5, 6, 7, 8, 20, 21, 22, 23, 24, 25, 26, 27),
-    group       = factor(rep(c("A", "B"), each = 8))
+    outcome_num = c(1:10, 20:29),
+    group       = factor(rep(c("A", "B"), each = 10))
   )
   result <- calc_stats(data, outcomes = "outcome_num", predictors = "group",
-                        statistics = c("mean", "sd"), pval = TRUE, multicode = FALSE)
+                        statistics = c("mean", "sd"), pval = TRUE)
   group_rows <- result %>% filter(cross_break == "group")
 
   expect_true(all(!is.na(group_rows$p_value)))
@@ -877,21 +860,21 @@ test_that("44. calc_stats() computes a shared, non-NA p-value for mean and sd to
 # (added after this test was first written, once Joe specified the actual
 # intended design: one p-value per outer level, testing the inner variable
 # against the outcome within it) now genuinely computes one for group1_X_
-# group2's rows. Within A: group2 = X gives 10,20, group2 = Y gives 30,40 -
+# group2's rows. Within A: group2 = X gives 1-10, group2 = Y gives 21-30 -
 # a real difference, so "within A, is group2 associated with outcome_num"
-# should return a real (non-NA) p-value, not hand-calculable exactly with
-# only 2 observations per group, so checked structurally.
+# should return a real (non-NA) p-value, checked structurally.
 
 test_that("45. calc_stats() computes a nested p-value per outer level (and doesn't error) when every predictor set is nested", {
   data <- tibble(
-    outcome_num = c(10, 20, 30, 40, 50, 60, 70, 80),
-    group1      = factor(c("A", "A", "A", "A", "B", "B", "B", "B")),
-    group2      = factor(c("X", "X", "Y", "Y", "X", "X", "Y", "Y"))
+    # 10 per group1 x group2 cell, so every group can be tested.
+    outcome_num = c(1:10, 21:30, 5:14, 31:40),
+    group1      = factor(rep(c("A", "B"), each = 20)),
+    group2      = factor(rep(rep(c("X", "Y"), each = 10), 2))
   )
 
   expect_no_error(
     result <- calc_stats(data, outcomes = "outcome_num", predictors = list(c("group1", "group2")),
-                          statistics = "mean", pval = TRUE, multicode = FALSE)
+                          statistics = "mean", pval = TRUE)
   )
 
   total_row   <- result %>% filter(cross_break == "Total")

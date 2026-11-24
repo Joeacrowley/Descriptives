@@ -58,7 +58,7 @@ test_that("1. detect_stem_columns() finds 2 stem columns (Variable, Statistics) 
     sex    = factor(c("Male", "Male", "Male", "Female", "Female", "Female"))
   )
   stats_table <- calc_stats(data, outcomes = "region", predictors = "sex",
-                             statistics = "perc", multicode = FALSE)
+                             statistics = "perc")
   ht <- format_crosstab(pivot_crosstab(stats_table))
 
   expect_equal(detect_stem_columns(ht), 2L)
@@ -143,7 +143,7 @@ test_that("6. add_huxtable_to_workbook() writes a real huxtable into an openxlsx
     sex    = factor(c("Male", "Male", "Male", "Female", "Female", "Female"))
   )
   stats_table <- calc_stats(data, outcomes = "region", predictors = "sex",
-                             statistics = "perc", multicode = FALSE)
+                             statistics = "perc")
   ht <- format_crosstab(pivot_crosstab(stats_table))
 
   wb <- openxlsx::createWorkbook()

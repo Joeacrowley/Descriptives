@@ -17,7 +17,8 @@
 #'   `range`, `iqr`, `sd`. Default `c("mean", "sd")`.
 #' @param weighted If `TRUE`, requests the weighted equivalent of each
 #'   statistic that has one (`data` must then be a survey design object).
-#' @param base Optional base/filter expression, passed to [calc_stats()].
+#' @param base A single string, or made with [base_information()], passed
+#'   to [calc_stats()].
 #' @param formatted If `TRUE` (default), returns the styled `huxtable`.
 #'   If `FALSE`, returns [pivot_numeric_summary()]'s own list output
 #'   untouched.

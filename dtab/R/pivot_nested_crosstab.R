@@ -89,8 +89,8 @@ reshape_nested_predictor_set <- function(rows_for_set) {
   # full (outer, inner) grid. Deliberately NOT tidyr::complete()/nesting()/
   # crossing(): those sort their output, so o_cat (and outcome) come back
   # alphabetical whenever the column is character - which it is as soon as
-  # multicode collapsing has run (o_cat = right_stem, then bind_rows()
-  # coerces the whole column). distinct() and expand_grid() keep order of
+  # multicodes are folded (each option's o_cat is its label text, and
+  # bind_rows() coerces the whole column). distinct() and expand_grid() keep order of
   # first appearance, i.e. the order calc_stats() produced, and every
   # later step (pivot_wider, fct_inorder, group_split) just preserves it.
   row_keys <- rows_for_set %>%
@@ -172,11 +172,18 @@ reshape_nested_predictor_set <- function(rows_for_set) {
 #' @return A list: `pivoted`, `bases`, `col_order`, `header_info`,
 #'   `conf_type` ("se", "ci", or `NA`), and `legend` (a tibble, or `NULL`
 #'   if `pairwise = TRUE` wasn't used). Pass this list straight to
-#'   [format_nested_crosstab()].
+#'   [format_nested_crosstab()]. In the p-value columns, a p-value that
+#'   couldn't be tested (too few cases) is `NaN`, not `NA`.
 #'
 #' @seealso [format_nested_crosstab()], [pivot_crosstab()], [calc_stats()]
 #' @keywords internal
 pivot_nested_crosstab <- function(data) {
+
+  # A multicoded question's options are separate outcomes; multicode_group
+  # holds the question. Use it as the outcome so the options share one table.
+  if ("multicode_group" %in% names(data)) {
+    data <- data %>% mutate(outcome = coalesce(multicode_group, outcome)) %>% select(-multicode_group)
+  }
 
   if (!all(c("p_cat2", "p_lab2", "predictor2") %in% names(data))) {
     stop("pivot_nested_crosstab() needs a nested predictor set - call calc_stats() with ",
@@ -184,9 +191,10 @@ pivot_nested_crosstab <- function(data) {
          "instead for a flat (single-variable) predictor.")
   }
 
-  bases <- data %>% pull(base_description) %>% unique() %>% paste0(collapse = " X ")
-  if (any(!is.na(bases))) bases <- bases %>% prepare_base_for_table()
-  data <- data %>% select(-base_description)
+  # Base footnote lines from the o_base / p_base1... columns, then drop
+  # those columns so they don't split rows when reshaping.
+  bases <- summarise_bases(data)
+  data <- data %>% select(-any_of("o_base"), -starts_with("p_base"))
 
   if ("estimate_se" %in% names(data) && all(data$estimate_se == "-")) {
     data <- data %>% select(-estimate_se)
@@ -196,7 +204,8 @@ pivot_nested_crosstab <- function(data) {
 
   # Total isn't shown as its own column here - there's no natural place
   # for it inside a 2-tier nested header.
-  nested_rows <- data %>% filter(p_cat1 != "Total")
+  # Total rows found by cross_break, so an outer level called "Total" stays.
+  nested_rows <- data %>% filter(cross_break != "Total")
 
   nested_sets <- nested_rows %>% pull(cross_break) %>% unique()
   if (length(nested_sets) == 0) {
@@ -205,14 +214,6 @@ pivot_nested_crosstab <- function(data) {
   if (length(nested_sets) > 1) {
     stop("pivot_nested_crosstab() only supports one nested predictor set at a time - found: ",
          paste(nested_sets, collapse = ", "))
-  }
-
-  cat_stat_counts <- nested_rows %>% filter(outcome_type %in% c("categorical", "multicoded")) %>%
-    distinct(outcome, stat) %>% count(outcome)
-  offending <- cat_stat_counts %>% filter(n > 1) %>% pull(outcome)
-  if (length(offending) > 0) {
-    stop("pivot_nested_crosstab() only supports one statistic per categorical variable. ",
-         "Multiple statistics were requested for: ", paste(offending, collapse = ", "))
   }
 
   set_result <- reshape_nested_predictor_set(nested_rows)
@@ -233,7 +234,7 @@ pivot_nested_crosstab <- function(data) {
              all_of(col_order), any_of(paste0(col_order, "__conf")),
              any_of(paste0(col_order, "__sigdiff")))
 
-    if (!is_categorical) return(data_rows)
+    if (!is_categorical || !block$first_stat[1]) return(data_rows)
 
     label_row <- data_rows[1, ] %>%
       mutate(Variable = block$o_lab[1], row_type = "label", o_cat = NA_character_) %>%
@@ -244,6 +245,9 @@ pivot_nested_crosstab <- function(data) {
   }
 
   pivoted <- estimate_wide %>%
+    # A categorical variable with several statistics (e.g. perc + count)
+    # gets one label row, above its first statistic's block only.
+    mutate(first_stat = stat == stat[1], .by = outcome) %>%
     mutate(.block = fct_inorder(paste(outcome, stat, sep = "___"))) %>%
     group_split(.block) %>%
     map_df(pivot_one_block) %>%
@@ -261,8 +265,15 @@ pivot_nested_crosstab <- function(data) {
   })
 
   nested_p_values <- nested_rows %>%
-    filter(!is.na(p_value)) %>%
-    distinct(outcome, o_cat, p_cat1, p_value)
+    # Untested p-values (p_method "Not tested: ...") are kept as NaN - still
+    # a number, but marked - so format_pvalue() can show them as "n/t".
+    mutate(p_value = if_else(is.na(p_value) & !is.na(p_method) & str_starts(p_method, "Not tested"),
+                             NaN, p_value)) %>%
+    filter(!is.na(p_value) | is.nan(p_value)) %>%
+    # Stats from the same test (e.g. perc + count) share one p-value;
+    # perc and w_perc are different tests, so each keeps its own.
+    mutate(stat_type = stat_type_of(stat)) %>%
+    distinct(outcome, o_cat, stat_type, p_cat1, p_value)
 
   inner_label <- header_info$inner_label[1]
 
@@ -273,17 +284,20 @@ pivot_nested_crosstab <- function(data) {
       if (nrow(lvl_pvalues) == 0) next
 
       pivoted <- pivoted %>%
-        left_join(lvl_pvalues, by = c("outcome", "o_cat")) %>%
-        group_by(outcome) %>%
+        mutate(stat_type = stat_type_of(stat)) %>%
+        left_join(lvl_pvalues, by = c("outcome", "o_cat", "stat_type")) %>%
+        group_by(outcome, stat_type) %>%
         mutate(data_row_number = cumsum(row_type == "data"),
                "{p_col_name}" := case_when(
                  row_type != "data" ~ NA_real_,
-                 outcome_type == "multicoded" ~ p_value,
+                 # Multicoded: each option keeps its own p-value, on the
+                 # first statistic's rows only (e.g. on %, not again on Count).
+                 outcome_type == "multicoded" & stat == stat[row_type == "data"][1] ~ p_value,
                  data_row_number == 1 ~ p_value,
                  TRUE ~ NA_real_
                )) %>%
         ungroup() %>%
-        select(-p_value, -data_row_number)
+        select(-p_value, -data_row_number, -stat_type)
 
       # Right after that outer level's own last inner column, not
       # wherever the loop happened to append it.
@@ -346,7 +360,8 @@ pivot_nested_crosstab <- function(data) {
 #' each data row when present, a Sig. diff row (and legend block) per
 #' outer level when `pivot_nested_crosstab()` was given pairwise-tested
 #' data, and `format_statistic()`'s digit rules applied per row's own
-#' `stat_code`.
+#' `stat_code`. P-values and Sig. diff cells that couldn't be tested (too
+#' few cases) show "n/t", with a footnote explaining it.
 #'
 #' @param pivot_result The list returned by [pivot_nested_crosstab()].
 #'
@@ -620,6 +635,11 @@ format_nested_crosstab <- function(pivot_result) {
     for (i in seq_along(bases)) {
       ht <- ht %>% huxtable::add_footnote(bases[[i]], border = NULL)
     }
+  }
+
+  # Explain "n/t" if any p-value or Sig. diff cell has it.
+  if (any(as.matrix(data) == "n/t", na.rm = TRUE)) {
+    ht <- ht %>% huxtable::add_footnote("n/t: not tested - too few cases.", border = NULL)
   }
 
   ht

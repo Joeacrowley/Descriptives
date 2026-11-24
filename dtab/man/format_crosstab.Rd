@@ -18,7 +18,8 @@ Builds the printable crosstab: bolds variable names, inserts SE/CI rows
 under each data row when present, inserts a Sig. diff row (and a legend
 block above the table) when \code{pivot_crosstab()} was given pairwise-tested
 data, and applies \code{format_statistic()}'s digit rules per row's own
-\code{stat_code}.
+\code{stat_code}. P-values and Sig. diff cells that couldn't be tested (too
+few cases) show "n/t", with a footnote explaining it.
 }
 \seealso{
 \code{\link[=pivot_crosstab]{pivot_crosstab()}}

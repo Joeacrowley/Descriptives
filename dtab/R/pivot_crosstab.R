@@ -10,14 +10,13 @@
 # SE/CI live in a parallel "<level>__conf" column alongside the estimate,
 # not spread into their own columns.
 #
-# Multicoded p-values: a multicoded variable's levels each carry their own
-# independent p-value rather than one shared across the variable - each
-# level was still a separate raw outcome column when calc_stats() computed
-# p-values, before convert_multicodes() collapsed them. This is why the
+# Multicoded p-values: each option of a multicoded question carries its own
+# p-value rather than one shared across the question - each option is its
+# own outcome when calc_stats() computes p-values. pivot_crosstab() then
+# gives the options one shared `outcome` (their multicode_group), so the
 # p-value join is keyed on (outcome, o_cat, stat_type), not just (outcome,
-# stat_type) - o_cat is what lets each level find its own p-value instead
-# of all of them fanning out to match once several levels share one
-# collapsed `outcome` name.
+# stat_type) - o_cat is what lets each option find its own p-value instead
+# of all of them matching the shared `outcome` name.
 
 
 # Classifies a stat into one of 4 test types - two stats of the same type
@@ -40,16 +39,21 @@ stat_type_of <- function(stat) {
 # more than one set is present.
 reshape_one_predictor_set <- function(rows_for_set, p_lab, prefix) {
 
+  # Total rows are the no-breakdown rows (cross_break == "Total"), not any
+  # predictor level that happens to be called "Total". A real level called
+  # "Total" gets its predictor label in front, so its column can't clash
+  # with the Total column.
   rows_for_set <- rows_for_set %>%
-    mutate(p_cat1_label = if (prefix) {
-      if_else(p_cat1 == "Total", "Total", paste0(p_lab, ": ", p_cat1))
-    } else {
-      as.character(p_cat1)
-    })
+    mutate(is_total = cross_break == "Total",
+           p_cat1_label = case_when(
+             is_total ~ "Total",
+             prefix | p_cat1 == "Total" ~ paste0(p_lab, ": ", p_cat1),
+             TRUE ~ as.character(p_cat1)
+           ))
 
-  level_order <- rows_for_set %>% filter(p_cat1 != "Total") %>%
+  level_order <- rows_for_set %>% filter(!is_total) %>%
     pull(p_cat1_label) %>% fct_inorder() %>% levels()
-  if ("Total" %in% rows_for_set$p_cat1) level_order <- c("Total", level_order)
+  if (any(rows_for_set$is_total)) level_order <- c("Total", level_order)
 
   has_ci <- "estimate_ci" %in% names(rows_for_set)
   has_se <- "estimate_se" %in% names(rows_for_set)
@@ -92,7 +96,11 @@ reshape_one_predictor_set <- function(rows_for_set, p_lab, prefix) {
     select(outcome, o_lab, all_of(level_order))
 
   p_values <- rows_for_set %>%
-    filter(!is.na(p_value)) %>%
+    # Untested p-values (p_method "Not tested: ...") are kept as NaN - still
+    # a number, but marked - so format_pvalue() can show them as "n/t".
+    mutate(p_value = if_else(is.na(p_value) & !is.na(p_method) & str_starts(p_method, "Not tested"),
+                             NaN, p_value)) %>%
+    filter(!is.na(p_value) | is.nan(p_value)) %>%
     mutate(stat_type = stat_type_of(stat)) %>%
     distinct(outcome, o_cat, stat_type, p_value)
 
@@ -103,7 +111,7 @@ reshape_one_predictor_set <- function(rows_for_set, p_lab, prefix) {
   # own digit-formatting already made the level columns character.
   legend <- if ("sig_letter" %in% names(rows_for_set)) {
     rows_for_set %>%
-      filter(p_cat1 != "Total", !is.na(sig_letter)) %>%
+      filter(!is_total, !is.na(sig_letter)) %>%
       distinct(level_col = p_cat1_label, sig_letter)
   } else {
     NULL
@@ -124,8 +132,9 @@ reshape_one_predictor_set <- function(rows_for_set, p_lab, prefix) {
 #' Supports `calc_stats(pairwise = TRUE)` output: a `legend` (returned as
 #' the 6th list element) and `"<level>__sigdiff"` columns feed
 #' [format_crosstab()]'s inserted legend row and Sig. diff row. A
-#' categorical variable is limited to exactly one statistic per call;
-#' a numeric variable can have more than one (e.g. mean + median).
+#' variable can have more than one statistic (e.g. perc + count, or mean +
+#' median): each statistic gets its own block of rows, and a categorical
+#' variable's label row is shown once, above the first.
 #'
 #' @param data A tibble as returned by [calc_stats()], with at least one
 #'   flat predictor (`predictors` not `NULL`, and no element of length > 1).
@@ -134,18 +143,26 @@ reshape_one_predictor_set <- function(rows_for_set, p_lab, prefix) {
 #'   (a named vector - `cross_break` as names, display label as values),
 #'   `conf_type` ("se", "ci", or `NA`), and `legend` (a tibble, or `NULL`
 #'   if `pairwise = TRUE` wasn't used). Pass this list straight to
-#'   [format_crosstab()].
+#'   [format_crosstab()]. In the `"p_value (<predictor>)"` columns, a
+#'   p-value that couldn't be tested (too few cases) is `NaN`, not `NA`.
 #'
 #' @seealso [format_crosstab()], [pivot_nested_crosstab()], [calc_stats()]
 #' @keywords internal
 pivot_crosstab <- function(data) {
 
-  data <- data %>%
-    select(-any_of(grep("p_lab[2-9]|p_cat[2-9]|predictor[2-9]", names(data), value = TRUE)))
+  # A multicoded question's options are separate outcomes; multicode_group
+  # holds the question. Use it as the outcome so the options share one table.
+  if ("multicode_group" %in% names(data)) {
+    data <- data %>% mutate(outcome = coalesce(multicode_group, outcome)) %>% select(-multicode_group)
+  }
 
-  bases <- data %>% pull(base_description) %>% unique() %>% paste0(collapse = " X ")
-  if (any(!is.na(bases))) bases <- bases %>% prepare_base_for_table()
-  data <- data %>% select(-base_description)
+  data <- data %>%
+    select(-any_of(grep("p_lab[2-9]|p_cat[2-9]|p_base[2-9]|predictor[2-9]", names(data), value = TRUE)))
+
+  # Base footnote lines from the o_base / p_base1... columns, then drop
+  # those columns so they don't split rows when reshaping.
+  bases <- summarise_bases(data)
+  data <- data %>% select(-any_of("o_base"), -starts_with("p_base"))
 
   if ("estimate_se" %in% names(data) && all(data$estimate_se == "-")) {
     data <- data %>% select(-estimate_se)
@@ -159,14 +176,6 @@ pivot_crosstab <- function(data) {
     stop("pivot_crosstab() needs at least one predictor - use pivot_summary() for a Total-only table.")
   }
 
-  cat_stat_counts <- data %>% filter(outcome_type %in% c("categorical", "multicoded")) %>%
-    distinct(outcome, stat) %>% count(outcome)
-  offending <- cat_stat_counts %>% filter(n > 1) %>% pull(outcome)
-  if (length(offending) > 0) {
-    stop("pivot_crosstab() only supports one statistic per categorical variable. ",
-         "Multiple statistics were requested for: ", paste(offending, collapse = ", "))
-  }
-
   multiple_sets <- length(predictor_sets) > 1
 
   rows_by_set <- map(seq_along(predictor_sets), function(i) {
@@ -175,7 +184,7 @@ pivot_crosstab <- function(data) {
   })
 
   p_labs <- map_chr(rows_by_set, function(rows) {
-    rows %>% filter(p_lab1 != "Total") %>% pull(p_lab1) %>% unique() %>% .[1]
+    rows %>% filter(cross_break != "Total") %>% pull(p_lab1) %>% unique() %>% .[1]
   })
   if (any(duplicated(p_labs))) {
     stop("Predictor sets must have distinct labels - found a repeated label: ",
@@ -203,7 +212,7 @@ pivot_crosstab <- function(data) {
              all_of(all_level_cols), any_of(paste0(all_level_cols, "__conf")),
              any_of(paste0(all_level_cols, "__sigdiff")))
 
-    if (!is_categorical) return(data_rows)
+    if (!is_categorical || !block$first_stat[1]) return(data_rows)
 
     label_row <- data_rows[1, ] %>%
       mutate(Variable = block$o_lab[1], row_type = "label", o_cat = NA_character_) %>%
@@ -214,6 +223,9 @@ pivot_crosstab <- function(data) {
   }
 
   pivoted <- estimate_wide %>%
+    # A categorical variable with several statistics (e.g. perc + count)
+    # gets one label row, above its first statistic's block only.
+    mutate(first_stat = stat == stat[1], .by = outcome) %>%
     mutate(.block = fct_inorder(paste(outcome, stat, sep = "___"))) %>%
     group_split(.block) %>%
     map_df(pivot_one_block) %>%
@@ -245,7 +257,9 @@ pivot_crosstab <- function(data) {
       mutate(data_row_number = cumsum(row_type == "data"),
              p_value = case_when(
                row_type != "data" ~ NA_real_,
-               outcome_type == "multicoded" ~ p_value,
+               # Multicoded: each option keeps its own p-value, on the
+               # first statistic's rows only (e.g. on %, not again on Count).
+               outcome_type == "multicoded" & stat == stat[row_type == "data"][1] ~ p_value,
                data_row_number == 1 ~ p_value,
                TRUE ~ NA_real_
              )) %>%
@@ -315,6 +329,7 @@ pivot_crosstab <- function(data) {
 # bottom.
 format_pvalue <- function(p) {
   case_when(
+    is.nan(p) ~ "n/t",          # not tested (see pivot_crosstab())
     is.na(p)  ~ NA_character_,
     p < 0.001 ~ "<0.001",
     TRUE      ~ formatC(p, digits = 3, format = "f")
@@ -327,7 +342,8 @@ format_pvalue <- function(p) {
 #' under each data row when present, inserts a Sig. diff row (and a legend
 #' block above the table) when `pivot_crosstab()` was given pairwise-tested
 #' data, and applies `format_statistic()`'s digit rules per row's own
-#' `stat_code`.
+#' `stat_code`. P-values and Sig. diff cells that couldn't be tested (too
+#' few cases) show "n/t", with a footnote explaining it.
 #'
 #' @param pivot_result The list returned by [pivot_crosstab()].
 #'
@@ -491,7 +507,7 @@ format_crosstab <- function(pivot_result) {
       pval_col_i <- paste0("p_value (", s$p_lab, ")")
       bare_labels <- dplyr::case_when(
         stringr::str_starts(s$cols, stringr::fixed(prefix_i)) ~ stringr::str_sub(s$cols, nchar(prefix_i) + 1),
-        s$cols == pval_col_i ~ "p_value",
+        s$cols == pval_col_i ~ "p-value",
         TRUE ~ s$cols
       )
       ht[header_offset, col_idx] <- bare_labels
@@ -599,6 +615,11 @@ format_crosstab <- function(pivot_result) {
     for (i in seq_along(bases)) {
       ht <- ht %>% huxtable::add_footnote(bases[[i]], border = NULL)
     }
+  }
+
+  # Explain "n/t" if any p-value or Sig. diff cell has it.
+  if (any(as.matrix(data) == "n/t", na.rm = TRUE)) {
+    ht <- ht %>% huxtable::add_footnote("n/t: not tested - too few cases.", border = NULL)
   }
 
   ht

@@ -14,13 +14,15 @@
 #' @param data A data frame, or survey design object.
 #' @param outcomes Character vector of categorical/multicoded outcome
 #'   variable names sharing consistent category levels (e.g. a Likert
-#'   battery).
+#'   battery), or `NULL` if `multicode` gives them all.
 #' @param statistics Exactly one statistic code: `"perc"`, `"count"`,
 #'   `"w_perc"`, or `"w_count"`.
 #' @param conf `NULL`, `"se"`, or `"ci"` - inserted as an extra row under
 #'   each item when requested.
-#' @param base Optional base/filter expression, passed to [calc_stats()].
-#' @param multicode Passed to [calc_stats()].
+#' @param base A single string, or made with [base_information()], passed
+#'   to [calc_stats()].
+#' @param multicode `NULL`, or a list of multicoded questions, passed to
+#'   [calc_stats()].
 #' @param formatted If `TRUE` (default), returns the styled `huxtable`.
 #'   If `FALSE`, returns [pivot_battery()]'s own list output untouched
 #'   (`pivoted`, `stat_code`, `category_order`, `conf_type`).
@@ -30,8 +32,8 @@
 #'
 #' @seealso [pivot_battery()], [format_battery()]
 #' @export
-make_battery_table <- function(data, outcomes, statistics = "perc", conf = NULL,
-                                base = NULL, multicode = FALSE, formatted = TRUE) {
+make_battery_table <- function(data, outcomes = NULL, statistics = "perc", conf = NULL,
+                                base = NULL, multicode = NULL, formatted = TRUE) {
 
   stats_table <- calc_stats(data, outcomes = outcomes, predictors = NULL,
                              statistics = statistics, conf = conf, base = base,

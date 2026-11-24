@@ -15,7 +15,8 @@ A list: \code{pivoted}, \code{bases}, \code{all_level_cols}, \code{predictor_set
 (a named vector - \code{cross_break} as names, display label as values),
 \code{conf_type} ("se", "ci", or \code{NA}), and \code{legend} (a tibble, or \code{NULL}
 if \code{pairwise = TRUE} wasn't used). Pass this list straight to
-\code{\link[=format_crosstab]{format_crosstab()}}.
+\code{\link[=format_crosstab]{format_crosstab()}}. In the \code{"p_value (<predictor>)"} columns, a
+p-value that couldn't be tested (too few cases) is \code{NaN}, not \code{NA}.
 }
 \description{
 One or more FLAT predictor sets (each \code{predictors} element of length 1),
