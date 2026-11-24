@@ -25,7 +25,7 @@
 
 test_that("1. a numeric-only variable gets one row, no label row, label directly on it", {
   data <- tibble(age = c(20, 25, 30, 35, 40))
-  stats_table <- calc_stats(data, outcomes = "age", statistics = "mean", multicode = FALSE)
+  stats_table <- calc_stats(data, outcomes = "age", statistics = "mean")
   result <- pivot_summary(stats_table)[[1]]
 
   expect_equal(nrow(result), 1)
@@ -35,7 +35,7 @@ test_that("1. a numeric-only variable gets one row, no label row, label directly
 
 test_that("2. a categorical variable gets a label row above its levels, blanked correctly", {
   data <- tibble(gender = factor(c("Male", "Female", "Male", "Female", "Male")))
-  stats_table <- calc_stats(data, outcomes = "gender", statistics = "perc", multicode = FALSE)
+  stats_table <- calc_stats(data, outcomes = "gender", statistics = "perc")
   result <- pivot_summary(stats_table)[[1]]
 
   expect_equal(nrow(result), 3)   # 1 label row + 2 levels
@@ -51,7 +51,7 @@ test_that("2. a categorical variable gets a label row above its levels, blanked 
 
 test_that("3. base_description is not carried through as a per-row column", {
   data <- tibble(age = c(20, 25, 30, 35, 40))
-  stats_table <- calc_stats(data, outcomes = "age", statistics = "mean", multicode = FALSE)
+  stats_table <- calc_stats(data, outcomes = "age", statistics = "mean")
   result <- pivot_summary(stats_table)[[1]]
 
   expect_false("base_description" %in% names(result))
@@ -63,7 +63,7 @@ test_that("4. only the Total row is kept when predictors were requested", {
     group = factor(c("A", "A", "B", "B", "A", "B"))
   )
   stats_table <- calc_stats(data, outcomes = "age", predictors = "group",
-                             statistics = "mean", multicode = FALSE)
+                             statistics = "mean")
   result <- pivot_summary(stats_table)[[1]]
 
   expect_equal(nrow(result), 1)   # the two "group" breakdown rows are dropped
@@ -76,7 +76,7 @@ test_that("5. Statistics uses short statistic labels end to end", {
     gender = factor(c("Male", "Female", "Male", "Female", "Male"))
   )
   stats_table <- calc_stats(data, outcomes = c("age", "gender"),
-                             statistics = c("mean", "perc"), multicode = FALSE)
+                             statistics = c("mean", "perc"))
   result <- pivot_summary(stats_table)[[1]]
 
   expect_true("Statistics" %in% names(result))
@@ -114,7 +114,7 @@ test_that("7. a 95% CI column is built and renamed correctly", {
 
 test_that("8. a variable shown with two statistics gets a label row per statistic", {
   data <- tibble(x = c(10, 20, 30, 40, 50))
-  stats_table <- calc_stats(data, outcomes = "x", statistics = c("mean", "median"), multicode = FALSE)
+  stats_table <- calc_stats(data, outcomes = "x", statistics = c("mean", "median"))
   result <- pivot_summary(stats_table)[[1]]
 
   expect_equal(sum(result$Variable == "x"), 2)
@@ -131,7 +131,7 @@ test_that("9. a more realistic table: two numeric variables (two statistics each
   )
 
   stats_table <- calc_stats(data, outcomes = c("age", "income", "region"),
-                             statistics = c("mean", "median", "perc"), multicode = FALSE)
+                             statistics = c("mean", "median", "perc"))
   result <- pivot_summary(stats_table)[[1]]
 
   # 2 numeric vars x 2 stats each (no label row) + 1 categorical var
@@ -191,7 +191,7 @@ test_that("10. format_summary() produces a correctly formatted huxtable for a se
     region = factor(c("North", "South", "North", "East", "South", "North"))
   )
   stats_table <- calc_stats(data, outcomes = c("age", "region"),
-                             statistics = c("mean", "perc"), multicode = FALSE)
+                             statistics = c("mean", "perc"))
   result <- format_summary(pivot_summary(stats_table))
 
   expect_s3_class(result, "huxtable")
@@ -287,7 +287,7 @@ test_that("13. format_summary() handles multiple variables (two numeric + one ca
     region = factor(c("North", "South", "North", "East", "South", "North"))
   )
   stats_table <- calc_stats(data, outcomes = c("age", "income", "region"),
-                             statistics = c("mean", "perc"), multicode = FALSE)
+                             statistics = c("mean", "perc"))
   result <- format_summary(pivot_summary(stats_table))
 
   expect_s3_class(result, "huxtable")
@@ -335,7 +335,7 @@ test_that("13. format_summary() handles multiple variables (two numeric + one ca
 
 test_that("14. format_summary() merges a variable's repeated Variable text across its two statistics", {
   data <- tibble(x = c(10, 20, 30, 40, 50, 100))
-  stats_table <- calc_stats(data, outcomes = "x", statistics = c("mean", "median"), multicode = FALSE)
+  stats_table <- calc_stats(data, outcomes = "x", statistics = c("mean", "median"))
   result <- format_summary(pivot_summary(stats_table))
 
   expect_equal(nrow(result), 3)   # 1 header + mean row + median row
@@ -390,8 +390,8 @@ test_that("15. a real multicode variable is pivoted the same way as an ordinary 
   attr(data$Q1_OptionB, "label") <- "Q1: Option B"
   attr(data$Q1_OptionC, "label") <- "Q1: Option C"
 
-  stats_table <- calc_stats(data, outcomes = c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC"),
-                             statistics = "perc", multicode = TRUE)
+  stats_table <- calc_stats(data, statistics = "perc",
+                             multicode = list(c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC")))
   result <- pivot_summary(stats_table)[[1]]
 
   expect_equal(nrow(result), 4)   # 1 label row + 3 levels, same shape as a plain categorical variable

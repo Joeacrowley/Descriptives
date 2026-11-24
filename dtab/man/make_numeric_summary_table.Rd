@@ -24,7 +24,8 @@ make_numeric_summary_table(
 \item{weighted}{If \code{TRUE}, requests the weighted equivalent of each
 statistic that has one (\code{data} must then be a survey design object).}
 
-\item{base}{Optional base/filter expression, passed to \code{\link[=calc_stats]{calc_stats()}}.}
+\item{base}{A single string, or made with \code{\link[=base_information]{base_information()}}, passed
+to \code{\link[=calc_stats]{calc_stats()}}.}
 
 \item{formatted}{If \code{TRUE} (default), returns the styled \code{huxtable}.
 If \code{FALSE}, returns \code{\link[=pivot_numeric_summary]{pivot_numeric_summary()}}'s own list output

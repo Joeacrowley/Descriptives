@@ -32,8 +32,7 @@ test_that("1. make_battery_table() dispatches to calc_stats() -> pivot_battery()
   result <- make_battery_table(data, outcomes = c("item1", "item2"), statistics = "perc")
 
   expected_stats_table <- calc_stats(data, outcomes = c("item1", "item2"), predictors = NULL,
-                                      statistics = "perc", conf = NULL, base = NULL,
-                                      multicode = FALSE)
+                                      statistics = "perc", conf = NULL, base = NULL)
   expected <- format_battery(pivot_battery(expected_stats_table))
 
   expect_s3_class(result, "huxtable")
@@ -50,8 +49,7 @@ test_that("2. make_battery_table(formatted = FALSE) returns pivot_battery()'s ow
   result <- make_battery_table(data, outcomes = "item1", statistics = "perc", formatted = FALSE)
 
   expected_stats_table <- calc_stats(data, outcomes = "item1", predictors = NULL,
-                                      statistics = "perc", conf = NULL, base = NULL,
-                                      multicode = FALSE)
+                                      statistics = "perc", conf = NULL, base = NULL)
   expected <- pivot_battery(expected_stats_table)
 
   expect_type(result, "list")
@@ -79,8 +77,7 @@ test_that("3. make_battery_table(conf = \"se\") reaches pivot_battery()/format_b
                                 statistics = "perc", conf = "se")
 
   expected_stats_table <- calc_stats(data, outcomes = c("item1", "item2"), predictors = NULL,
-                                      statistics = "perc", conf = "se", base = NULL,
-                                      multicode = FALSE)
+                                      statistics = "perc", conf = "se", base = NULL)
   expected <- format_battery(pivot_battery(expected_stats_table))
 
   expect_s3_class(result, "huxtable")

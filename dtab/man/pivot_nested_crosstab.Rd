@@ -14,7 +14,8 @@ pivot_nested_crosstab(data)
 A list: \code{pivoted}, \code{bases}, \code{col_order}, \code{header_info},
 \code{conf_type} ("se", "ci", or \code{NA}), and \code{legend} (a tibble, or \code{NULL}
 if \code{pairwise = TRUE} wasn't used). Pass this list straight to
-\code{\link[=format_nested_crosstab]{format_nested_crosstab()}}.
+\code{\link[=format_nested_crosstab]{format_nested_crosstab()}}. In the p-value columns, a p-value that
+couldn't be tested (too few cases) is \code{NaN}, not \code{NA}.
 }
 \description{
 For a single NESTED predictor set (\verb{predictors = list(c(<outer>, <inner>))}) - a 4-row header with the outer variable's levels

@@ -29,8 +29,8 @@ numeric_summary_weighted_equiv <- c(
 #'   statistic that has one (`data` must then be a survey design object).
 #'   `min`/`max`/`range` have no weighted equivalent and are returned
 #'   unweighted regardless.
-#' @param base Optional base/filter expression, passed through to
-#'   [calc_stats()].
+#' @param base A single string, or made with [base_information()], passed
+#'   to [calc_stats()].
 #'
 #' @return A list: `pivoted` (one row per variable, one column per
 #'   statistic, plus `Base`) and `stat_lookup` (a named vector mapping each
@@ -64,7 +64,7 @@ pivot_numeric_summary <- function(data, outcomes, statistics = c("mean", "sd"),
 
   stats_table <- calc_stats(data, outcomes = outcomes, predictors = NULL,
                              statistics = requested_stats, conf = NULL,
-                             base = base, pval = NULL, multicode = FALSE)
+                             base = base)
 
   labelled <- stats_table %>% tidy_statistic_description()
 

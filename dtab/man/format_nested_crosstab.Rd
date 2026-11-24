@@ -19,7 +19,8 @@ outer levels, inner label, inner levels), SE/CI rows inserted under
 each data row when present, a Sig. diff row (and legend block) per
 outer level when \code{pivot_nested_crosstab()} was given pairwise-tested
 data, and \code{format_statistic()}'s digit rules applied per row's own
-\code{stat_code}.
+\code{stat_code}. P-values and Sig. diff cells that couldn't be tested (too
+few cases) show "n/t", with a footnote explaining it.
 }
 \seealso{
 \code{\link[=pivot_nested_crosstab]{pivot_nested_crosstab()}}

@@ -7,77 +7,104 @@ zero or more predictors}
 \usage{
 calc_stats(
   data,
-  outcomes,
+  outcomes = NULL,
   predictors = NULL,
   statistics = c("count", "mean"),
   conf = NULL,
   base = NULL,
-  pval = NULL,
-  multicode = TRUE,
+  pval = FALSE,
+  numeric_test = "means",
+  multicode = NULL,
   pairwise = FALSE,
   pw_outcome_levels = NULL,
-  pw_crit_lev = 0.05
+  pw_crit_lev = 0.05,
+  drop_empty_levels = FALSE,
+  pw_adjust = "BH"
 )
 }
 \arguments{
 \item{data}{A data frame, or a survey design object (e.g. from
 \code{srvyr::as_survey_design()}) for weighted statistics.}
 
-\item{outcomes}{Character vector of outcome variable names.}
+\item{outcomes}{Character vector of outcome variable names. Can be \code{NULL}
+if \code{multicode} is given.}
 
 \item{predictors}{\code{NULL} for no breakdown (Total only), a character
 vector/single variable name, a list of variable names for multiple
 side-by-side flat predictor sets, or \verb{list(c(<outer>, <inner>))} for
-a nested predictor set. All predictors must be factors.}
+a nested predictor set. Predictors must be factors, characters,
+logicals or labelled variables (the last three become factors).
+Cases missing a predictor are left out of that predictor's breakdown
+but still count in Total, so its groups' bases can add up to less
+than Total's.}
 
 \item{statistics}{Character vector of statistic codes to compute, e.g.
 \code{"perc"}, \code{"count"}, \code{"mean"}, \code{"median"}, \code{"sum"}, \code{"min"}, \code{"max"},
 \code{"range"}, \code{"iqr"}, \code{"sd"}, and their weighted \code{w_}-prefixed
-equivalents (weighted versions require a survey design as \code{data}).}
+equivalents (weighted versions require a survey design as \code{data}).
+Each is only run on outcomes it fits (perc/count on factors, the rest
+on numerics).}
 
 \item{conf}{\code{NULL}, \code{"se"}, or \code{"ci"} - adds a standard error or
 confidence interval alongside each estimate.}
 
-\item{base}{Optional base/filter expression restricting which cases
-each outcome is computed over.}
+\item{base}{Optional base description for the footnote: a single string
+used for every variable (e.g. \code{"All respondents"}), or an object from
+\code{base_information()} for variable-specific bases.}
 
-\item{pval}{Optional p-value method for testing association between an
-outcome and a predictor (e.g. chi-square for categorical, ANOVA/
-Shapiro-Wilk-gated for numeric).}
+\item{pval}{If \code{TRUE}, adds p-values testing association between each
+outcome and predictor: chi-square for categorical outcomes (Rao-Scott
+when weighted), and for numeric outcomes the test \code{numeric_test} sets.
+One p-value per flat predictor set, and one per outer level of a nested
+set. Groups with fewer than 10 cases aren't tested. Default \code{FALSE}.}
 
-\item{multicode}{If \code{TRUE} (default), an outcome coded as multiple
-binary/dummy columns sharing a common stem is treated as a single
-multicoded (select-all-that-apply) variable rather than several
-independent ones.}
+\item{numeric_test}{For numeric outcomes when \code{pval = TRUE}: \code{"means"}
+(default) compares group means - Welch's ANOVA, or a Wald test when
+weighted. \code{"ranks"} uses Kruskal-Wallis (design-based when weighted).}
 
-\item{pairwise}{If \code{TRUE}, adds \code{sig_letter}/\code{sig_diff} columns from
-pairwise significance testing between predictor levels (one t-test/
-\code{svyttest()} per pair, Holm-adjusted within each comparison set,
-BH-adjusted again across the full set before flagging significance).
-Only the outcome's preferred statistic is tested (weighted over
-unweighted, mean/perc over their \code{w_}-prefixed equivalents where both
-are available), and only flat or single-level-nested predictor sets.}
+\item{multicode}{\code{NULL} (default), or a list of multicoded
+(select-all-that-apply) questions, each a character vector of its
+yes/no option variables, e.g. \code{list(c("q1a", "q1b"), c("q2a", "q2b", "q2c"))}.
+Each question is shown as one table with a row per option. Options need
+labels like "\if{html}{\out{<question>}}: \if{html}{\out{<option>}}", and must not also be predictors.
+They're added to \code{outcomes} if not already there - list them in
+\code{outcomes} too to control where the question appears.}
+
+\item{pairwise}{If \code{TRUE}, adds \code{sig_letter}/\code{sig_diff}/\code{sig_untested}/
+\code{sig_method} columns from pairwise significance testing between
+predictor levels. Pairs with too few cases to test (fewer than 10 in a
+group, or fewer than 3 in or out of the category) are skipped and
+listed in \code{sig_untested}; the rest are still tested.}
 
 \item{pw_outcome_levels}{Optional named list restricting which outcome
-categories get pairwise-tested (names are outcome variable names,
-values are the categories to test) - only used when \code{pairwise = TRUE}.}
+categories get pairwise-tested - only used when \code{pairwise = TRUE}.}
 
 \item{pw_crit_lev}{Significance threshold for \code{sig_diff} flagging when
 \code{pairwise = TRUE}. Default \code{0.05}.}
+
+\item{drop_empty_levels}{If \code{TRUE}, categories of a factor outcome that
+nobody in \code{data} picked are left out of the results. Default \code{FALSE}:
+they're kept as 0 rows, since a 0 can be a real finding.}
+
+\item{pw_adjust}{How pairwise p-values are adjusted for multiple
+comparisons when \code{pairwise = TRUE} - any method \code{p.adjust()} takes
+(\code{"BH"}, \code{"holm"}, \code{"bonferroni"}, \code{"none"}, ...). Adjusted across all
+comparisons for an outcome and predictor together. Default \code{"BH"}.}
 }
 \value{
 A long-format tibble with one row per (outcome, category,
-predictor level, statistic): \code{outcome}/\code{o_lab} (variable name/label),
-\code{o_cat} (category, for categorical/multicoded outcomes),
-\code{cross_break}/\code{p_cat1}/\code{p_lab} (predictor variable/level/label, and
-\code{p_cat2}/\code{p_lab2}/\code{predictor2} when a nested predictor set was used),
-\code{stat} (the statistic code), \code{estimate} (and \code{estimate_se}/
-\code{estimate_ci_low}/\code{estimate_ci_high} if \code{conf} was requested), \code{base}
-(and \code{base_description}), plus \code{p_value} when requested and
-\code{sig_letter}/\code{sig_diff} when \code{pairwise = TRUE}. Feed this
-straight into \code{\link[=pivot_summary]{pivot_summary()}}, \code{\link[=pivot_crosstab]{pivot_crosstab()}},
-\code{\link[=pivot_nested_crosstab]{pivot_nested_crosstab()}}, \code{\link[=pivot_battery]{pivot_battery()}} - or use one of the
-\verb{make_*()} wrappers to skip calling \code{calc_stats()} directly.
+predictor level, statistic): \code{cross_break} (\code{"Total"} when there's no
+breakdown), \code{predictorN}/\code{p_labN}/\code{p_catN} per predictor in the set,
+\code{outcome}/\code{o_lab}/\code{o_cat}, \code{stat}, \code{outcome_type}, \code{estimate} (plus
+\code{estimate_se}, or \code{estimate_low}/\code{estimate_upp}/\code{estimate_ci}, if
+\code{conf} was requested), \code{base}, \code{unweighted_n}, \code{o_base}/\code{p_baseN} (each
+variable's base description, when \code{base} is given),
+\code{p_method}/\code{p_value} (\code{p_method} says "Not tested: ..." and why, when
+a test couldn't run), \code{table_order}/\code{cat_order}/\code{row_order} for
+sorting, and, when \code{pairwise = TRUE}: \code{sig_letter} (each predictor
+level's letter), \code{sig_diff} (letters of levels it differs from
+significantly, \code{"-"} if none), \code{sig_untested} (letters of levels it
+couldn't be tested against) and \code{sig_method} (the test used).
 }
 \description{
 The engine every \verb{pivot_*()}/\verb{make_*()} function in this package builds

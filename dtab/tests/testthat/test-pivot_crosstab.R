@@ -25,7 +25,7 @@
 # computes p-values pre-collapse. Test 6 uses a hand-built calc_stats()-
 # shaped input with outcome_type = "multicoded" and two options carrying
 # deliberately different p-values, so the test can assert on exact values.
-# Test 9 backs that up with a real calc_stats(multicode=TRUE, pval=TRUE)
+# Test 9 backs that up with a real calc_stats(multicode = list(...), pval = TRUE)
 # call (the same Q1_OptionA/B/C + sex construction as test_calc_stats.R's
 # test 35), confirming this works end-to-end on genuine convert_multicodes()
 # output, not just a hand-set flag - checked structurally there (non-NA,
@@ -91,7 +91,7 @@ test_that("1. categorical variable x single predictor, no conf, no p-value reque
     sex    = factor(c("Male", "Male", "Male", "Female", "Female", "Female"))
   )
   stats_table <- calc_stats(data, outcomes = "region", predictors = "sex",
-                             statistics = "perc", multicode = FALSE)
+                             statistics = "perc")
   pivot_result <- pivot_crosstab(stats_table)
   result <- pivot_result[[1]]
   print(result)
@@ -172,7 +172,7 @@ test_that("2. numeric variable x single predictor, with SE", {
     sex = factor(c("Male", "Male", "Male", "Female", "Female", "Female"))
   )
   stats_table <- calc_stats(data, outcomes = "age", predictors = "sex",
-                             statistics = "mean", conf = "se", multicode = FALSE)
+                             statistics = "mean", conf = "se")
   pivot_result <- pivot_crosstab(stats_table)
   result <- pivot_result[[1]]
   print(result)
@@ -210,12 +210,14 @@ test_that("2. numeric variable x single predictor, with SE", {
 
 test_that("3. numeric variable with two statistics: p-value shown once, on the first (Mean) row", {
 
+  # Each row 4 times, so each group has 12 cases (groups under 10 aren't
+  # tested for p-values). Means and medians are the same as for one copy.
   data <- tibble(
     age = c(10, 20, 30, 40, 50, 60),
     sex = factor(c("Male", "Male", "Male", "Female", "Female", "Female"))
-  )
+  ) %>% slice(rep(1:n(), each = 4))
   stats_table <- calc_stats(data, outcomes = "age", predictors = "sex",
-                             statistics = c("mean", "median"), pval = TRUE, multicode = FALSE)
+                             statistics = c("mean", "median"), pval = TRUE)
   result <- pivot_crosstab(stats_table)[[1]]
   print(result)
 
@@ -249,20 +251,29 @@ test_that("4. errors when two predictor sets share the same label", {
   attr(data$g2, "label") <- "Group"   # same label text as g1, on purpose
 
   stats_table <- calc_stats(data, outcomes = "age", predictors = list("g1", "g2"),
-                             statistics = "mean", multicode = FALSE)
+                             statistics = "mean")
 
   expect_error(pivot_crosstab(stats_table), "distinct labels")
 })
 
-test_that("5. errors when a categorical variable has more than one statistic requested", {
+test_that("5. a categorical variable with two statistics: one label row, then each statistic's rows", {
+  # Male (rows 1-3): North, North, South -> North 2/3 (count 2), South 1/3 (count 1)
+  # Female (rows 4-6): South, South, North -> North 1/3 (count 1), South 2/3 (count 2)
   data <- tibble(
     region = factor(c("North", "North", "South", "South", "South", "North")),
     sex    = factor(c("Male", "Male", "Male", "Female", "Female", "Female"))
   )
   stats_table <- calc_stats(data, outcomes = "region", predictors = "sex",
-                             statistics = c("perc", "count"), multicode = FALSE)
+                             statistics = c("perc", "count"))
+  result <- pivot_crosstab(stats_table)[[1]]
 
-  expect_error(pivot_crosstab(stats_table), "one statistic per categorical variable")
+  # Label row once, then the % rows, then the Count rows.
+  expect_equal(result$Variable, c("region", "North", "South", "North", "South", "Sample sizes", "region"))
+  expect_equal(result$Statistics, c(NA, "%", "%", "Count", "Count", NA, NA))
+  expect_equal(sum(result$row_type == "label" & result$Variable == "region"), 1)
+
+  expect_equal(result$Male,   c(NA, 2/3, 1/3, 2, 1, NA, 3))
+  expect_equal(result$Female, c(NA, 1/3, 2/3, 1, 2, NA, 3))
 })
 
 test_that("6. a multi-code variable (outcome_type == 'multicoded') keeps its own p-value on every level, not just the first", {
@@ -288,6 +299,7 @@ test_that("6. a multi-code variable (outcome_type == 'multicoded') keeps its own
     base_description = NA_character_,
     p_lab1           = c("Total", "Total", "sex", "sex", "sex", "sex"),
     p_cat1           = c("Total", "Total", "Male", "Male", "Female", "Female"),
+    p_method         = c(NA, NA, rep("Chi-Square test", 4)),
     p_value          = c(NA, NA, 0.02, 0.15, 0.02, 0.15)
   )
 
@@ -375,7 +387,7 @@ test_that("7. categorical variable x two predictor sets side by side", {
     age_group = factor(c("Young", "Young", "Old", "Old", "Young", "Old"))
   )
   stats_table <- calc_stats(data, outcomes = "region", predictors = list("sex", "age_group"),
-                             statistics = "perc", multicode = FALSE)
+                             statistics = "perc")
   pivot_result <- pivot_crosstab(stats_table)
   result <- pivot_result[[1]]
   print(result)
@@ -426,13 +438,15 @@ test_that("8. numeric variable x two predictor sets side by side, with distinct 
   # age_group: Young (rows 1,2,5 -> ages 10,20,50) mean = 80/3 = 26.6667
   #            Old   (rows 3,4,6 -> ages 30,40,60) mean = 130/3 = 43.3333
   # Total (10..60): mean = 35
+  # Each row 4 times, so each group has 12 cases (groups under 10 aren't
+  # tested for p-values). Means and medians are the same as for one copy.
   data <- tibble(
     age       = c(10, 20, 30, 40, 50, 60),
     sex       = factor(c("Male", "Male", "Male", "Female", "Female", "Female")),
     age_group = factor(c("Young", "Young", "Old", "Old", "Young", "Old"))
-  )
+  ) %>% slice(rep(1:n(), each = 4))
   stats_table <- calc_stats(data, outcomes = "age", predictors = list("sex", "age_group"),
-                             statistics = "mean", pval = TRUE, multicode = FALSE)
+                             statistics = "mean", pval = TRUE)
   result <- pivot_crosstab(stats_table)[[1]]
   print(result)
 
@@ -471,7 +485,7 @@ test_that("8. numeric variable x two predictor sets side by side, with distinct 
   expect_equal(names(result)[which(names(result) == "age_group: Young") + 1], "p_value (age_group)")
 })
 
-test_that("9. a real multi-code variable end-to-end keeps a per-level p_value (calc_stats(multicode=TRUE, pval=TRUE) -> pivot_crosstab())", {
+test_that("9. a real multi-code variable end-to-end keeps a per-level p_value (calc_stats(multicode = list(...), pval = TRUE) -> pivot_crosstab())", {
 
   # Same Q1_OptionA/B/C + sex construction as test_calc_stats.R's test 35,
   # extended to 8 rows (4 Male, 4 Female) and pval = TRUE - test 35 itself
@@ -498,13 +512,16 @@ test_that("9. a real multi-code variable end-to-end keeps a per-level p_value (c
     Q1_OptionB = factor(c("Yes", "No",  "Yes", "No",  "Yes", "No",  "Yes", "No")),
     Q1_OptionC = factor(c("No",  "No",  "No",  "Yes", "Yes", "Yes", "Yes", "No")),
     sex        = factor(c("Male", "Male", "Male", "Male", "Female", "Female", "Female", "Female"))
-  )
+  ) %>%
+    # Each row 3 times, so each sex has 12 cases (groups under 10 aren't
+    # tested for p-values). The proportions are the same as for one copy.
+    slice(rep(1:n(), each = 3))
   attr(data$Q1_OptionA, "label") <- "Q1: Option A"
   attr(data$Q1_OptionB, "label") <- "Q1: Option B"
   attr(data$Q1_OptionC, "label") <- "Q1: Option C"
 
-  stats_table <- calc_stats(data, outcomes = c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC"),
-                             predictors = "sex", statistics = "perc", pval = TRUE, multicode = TRUE)
+  stats_table <- calc_stats(data, predictors = "sex", statistics = "perc", pval = TRUE,
+                             multicode = list(c("Q1_OptionA", "Q1_OptionB", "Q1_OptionC")))
 
   expect_equal(unique(stats_table$outcome_type), "multicoded")   # sanity check before the real assertion
 
@@ -583,7 +600,7 @@ test_that("11. format_crosstab() builds spanning headers and formats the base ro
     age_group = factor(c("Young", "Young", "Old", "Old", "Young", "Old"))
   )
   stats_table <- calc_stats(data, outcomes = "region", predictors = list("sex", "age_group"),
-                             statistics = "perc", multicode = FALSE)
+                             statistics = "perc")
   result <- format_crosstab(pivot_crosstab(stats_table))
   print(huxtable::as_flextable(result))
 
@@ -677,7 +694,7 @@ test_that("12. format_crosstab() shows SE as an inserted row and merges it with 
     sex = factor(c("Male", "Male", "Male", "Female", "Female", "Female"))
   )
   stats_table <- calc_stats(data, outcomes = "age", predictors = "sex",
-                             statistics = "mean", conf = "se", multicode = FALSE)
+                             statistics = "mean", conf = "se")
   result <- format_crosstab(pivot_crosstab(stats_table))
   print(huxtable::as_flextable(result))
 
@@ -750,12 +767,14 @@ test_that("12. format_crosstab() shows SE as an inserted row and merges it with 
 
 test_that("13. format_crosstab() merges Mean+Median rows and formats their shared p-value", {
 
+  # Each row 4 times, so each group has 12 cases (groups under 10 aren't
+  # tested for p-values). Means and medians are the same as for one copy.
   data <- tibble(
     age = c(10, 20, 30, 40, 50, 60),
     sex = factor(c("Male", "Male", "Male", "Female", "Female", "Female"))
-  )
+  ) %>% slice(rep(1:n(), each = 4))
   stats_table <- calc_stats(data, outcomes = "age", predictors = "sex",
-                             statistics = c("mean", "median"), pval = TRUE, multicode = FALSE)
+                             statistics = c("mean", "median"), pval = TRUE)
   result <- format_crosstab(pivot_crosstab(stats_table))
   print(huxtable::as_flextable(result))
 
@@ -813,21 +832,25 @@ test_that("14. format_crosstab() combines everything: two predictor sets, two st
   # them) - that interaction isn't exercised by tests 12 or 13 alone, since
   # 12 has one statistic and 13 has no conf rows.
   #
-  # sex: Male (10,20,30) mean=20, se=10/sqrt(3)=5.773503; median=20
-  #      Female (40,50,60) mean=50, se=5.773503; median=50
-  # Total (10..60): mean=35, se=18.708287/sqrt(6)=7.637626; median=35
+  # (each value 4 times, see below)
+  # sex: Male (10,20,30 x4) mean=20, sd=sqrt(800/11)=8.528029,
+  #      se=8.528029/sqrt(12)=2.461829; median=20
+  #      Female (40,50,60 x4) mean=50, se=2.461829; median=50
+  # Total (10..60 x4): mean=35, sd=sqrt(7000/23)=17.445626,
+  #      se=17.445626/sqrt(24)=3.561049; median=35
   # age_group means/medians and their SEs aren't re-verified by hand here
   # (already covered structurally, not numerically, for age_group in test
   # 8) - only sex and Total get exact-value checks; age_group gets presence/
   # structure checks only.
+  # Each row 4 times, so each group has 12 cases (groups under 10 aren't
+  # tested for p-values). Means and medians are the same as for one copy.
   data <- tibble(
     age       = c(10, 20, 30, 40, 50, 60),
     sex       = factor(c("Male", "Male", "Male", "Female", "Female", "Female")),
     age_group = factor(c("Young", "Young", "Old", "Old", "Young", "Old"))
-  )
+  ) %>% slice(rep(1:n(), each = 4))
   stats_table <- calc_stats(data, outcomes = "age", predictors = list("sex", "age_group"),
-                             statistics = c("mean", "median"), conf = "se", pval = TRUE,
-                             multicode = FALSE)
+                             statistics = c("mean", "median"), conf = "se", pval = TRUE)
   result <- format_crosstab(pivot_crosstab(stats_table))
   print(huxtable::as_flextable(result))
 
@@ -863,9 +886,9 @@ test_that("14. format_crosstab() combines everything: two predictor sets, two st
   expect_equal(result[["Total"]][mean_row],  "35.0")
   expect_equal(result[["sex: Male"]][mean_row],   "20.0")
   expect_equal(result[["sex: Female"]][mean_row], "50.0")
-  expect_equal(result[["Total"]][se_of_mean_row],  "7.6")
-  expect_equal(result[["sex: Male"]][se_of_mean_row],   "5.8")
-  expect_equal(result[["sex: Female"]][se_of_mean_row], "5.8")
+  expect_equal(result[["Total"]][se_of_mean_row],  "3.6")
+  expect_equal(result[["sex: Male"]][se_of_mean_row],   "2.5")
+  expect_equal(result[["sex: Female"]][se_of_mean_row], "2.5")
   expect_equal(result[["sex: Male"]][median_row],   "20.0")
   expect_equal(result[["sex: Female"]][median_row], "50.0")
 
@@ -876,8 +899,8 @@ test_that("14. format_crosstab() combines everything: two predictor sets, two st
   expect_false(is.na(result[["age_group: Young"]][se_of_mean_row]))
 
   # Base row: plain counts, unaffected by any of the merge/conf machinery.
-  expect_equal(result[["Total"]][base_row], "6")
-  expect_equal(result[["sex: Male"]][base_row],  "3")
+  expect_equal(result[["Total"]][base_row], "24")
+  expect_equal(result[["sex: Male"]][base_row],  "12")
 
   # The key interaction: all four of Mean/SE/Median/SE merge into ONE "age"
   # cell (rowspan 4), not two separate two-row merges - Base stays outside
@@ -953,12 +976,14 @@ test_that("14. format_crosstab() combines everything: two predictor sets, two st
 # confirming this isn't special-cased to the original three numeric stats.
 
 test_that("15. mean and sd share one p-value, same as mean and median do in test 3", {
+  # Each row 4 times, so each group has 12 cases (groups under 10 aren't
+  # tested for p-values). Means and medians are the same as for one copy.
   data <- tibble(
     age = c(10, 20, 30, 40, 50, 60),
     sex = factor(c("Male", "Male", "Male", "Female", "Female", "Female"))
-  )
+  ) %>% slice(rep(1:n(), each = 4))
   stats_table <- calc_stats(data, outcomes = "age", predictors = "sex",
-                             statistics = c("mean", "sd"), pval = TRUE, multicode = FALSE)
+                             statistics = c("mean", "sd"), pval = TRUE)
   result <- pivot_crosstab(stats_table)[[1]]
   print(result)
 
@@ -1014,7 +1039,7 @@ test_that("16. pivot_crosstab() relocates every variable's Base row into one con
   # exactly how a real mixed-type call would look, not a special case this
   # test has to work around (same reasoning as the nested table's test 12).
   stats_table <- calc_stats(data, outcomes = c("age", "result"), predictors = "sex",
-                             statistics = c("mean", "perc"), multicode = FALSE)
+                             statistics = c("mean", "perc"))
   pivoted <- pivot_crosstab(stats_table)[[1]]
   print(pivoted)
 
@@ -1056,7 +1081,7 @@ test_that("17. format_crosstab() still separates two adjacent NUMERIC variables,
                     levels = c("Male", "Female"))
   )
   stats_table <- calc_stats(data, outcomes = c("age", "score"), predictors = "sex",
-                             statistics = "mean", multicode = FALSE)
+                             statistics = "mean")
   result <- format_crosstab(pivot_crosstab(stats_table))
   print(huxtable::as_flextable(result))
 
@@ -1149,7 +1174,7 @@ test_that("18. pivot_crosstab() returns a legend (element 6) and __sigdiff colum
     region   = factor(c(rep("North", 20), rep("South", 20)), levels = c("North", "South"))
   )
   stats_table <- calc_stats(data, outcomes = "response", predictors = "region",
-                             statistics = "perc", conf = "se", multicode = FALSE, pairwise = TRUE)
+                             statistics = "perc", conf = "se", pairwise = TRUE)
   pivot_result <- pivot_crosstab(stats_table)
 
   legend <- pivot_result[[6]]
@@ -1171,7 +1196,7 @@ test_that("19. pivot_crosstab() returns a NULL legend and no __sigdiff columns w
     region   = factor(c(rep("North", 20), rep("South", 20)), levels = c("North", "South"))
   )
   stats_table <- calc_stats(data, outcomes = "response", predictors = "region",
-                             statistics = "perc", conf = "se", multicode = FALSE, pairwise = FALSE)
+                             statistics = "perc", conf = "se", pairwise = FALSE)
   pivot_result <- pivot_crosstab(stats_table)
 
   expect_null(pivot_result[[6]])
@@ -1187,7 +1212,7 @@ test_that("20. format_crosstab() shows the legend as its own first row, a Sig. d
   design <- data %>% srvyr::as_survey_design(ids = 1, weights = wt)
 
   stats_table <- calc_stats(design, outcomes = "response", predictors = "region",
-                             statistics = "w_perc", conf = "se", multicode = FALSE, pairwise = TRUE)
+                             statistics = "w_perc", conf = "se", pairwise = TRUE)
   pivot_result <- pivot_crosstab(stats_table)
   legend <- pivot_result[[6]]
   result <- format_crosstab(pivot_result)
@@ -1266,7 +1291,7 @@ test_that("21. format_crosstab() on a fuller, semi-realistic table - two predict
   # single-set case.
   stats_table <- calc_stats(design, outcomes = "response",
                              predictors = list("sex", "age_group"),
-                             statistics = "w_perc", conf = "se", multicode = FALSE,
+                             statistics = "w_perc", conf = "se",
                              pval = TRUE, pairwise = TRUE)
   result <- format_crosstab(pivot_crosstab(stats_table))
   print(huxtable::as_flextable(result))
@@ -1322,7 +1347,7 @@ test_that("22. pivot_crosstab() returns a legend (element 6) and __sigdiff colum
     region = factor(c(rep("North", 10), rep("South", 10)), levels = c("North", "South"))
   )
   stats_table <- calc_stats(data, outcomes = "score", predictors = "region",
-                             statistics = "mean", conf = "se", multicode = FALSE, pairwise = TRUE)
+                             statistics = "mean", conf = "se", pairwise = TRUE)
   pivot_result <- pivot_crosstab(stats_table)
 
   legend <- pivot_result[[6]]
@@ -1345,7 +1370,7 @@ test_that("23. format_crosstab() shows a legend row, a Sig. diff row, and suppre
   design <- data %>% srvyr::as_survey_design(ids = 1, weights = wt)
 
   stats_table <- calc_stats(design, outcomes = "score", predictors = "region",
-                             statistics = "w_mean", conf = "se", multicode = FALSE, pairwise = TRUE)
+                             statistics = "w_mean", conf = "se", pairwise = TRUE)
   pivot_result <- pivot_crosstab(stats_table)
   legend <- pivot_result[[6]]
   result <- format_crosstab(pivot_result)
@@ -1407,7 +1432,7 @@ test_that("24. format_crosstab() on a fuller w_mean table - two predictor sets, 
 
   stats_table <- calc_stats(design, outcomes = "score",
                              predictors = list("sex", "age_group"),
-                             statistics = "w_mean", conf = "se", multicode = FALSE,
+                             statistics = "w_mean", conf = "se",
                              pval = TRUE, pairwise = TRUE)
   result <- format_crosstab(pivot_crosstab(stats_table))
   print(huxtable::as_flextable(result))
@@ -1440,7 +1465,7 @@ test_that("25. format_crosstab() still inserts a Sig. diff row when a row WAS pa
   design <- data %>% srvyr::as_survey_design(ids = 1, weights = wt)
 
   stats_table <- calc_stats(design, outcomes = "response", predictors = "region",
-                             statistics = "w_perc", conf = "se", multicode = FALSE, pairwise = TRUE)
+                             statistics = "w_perc", conf = "se", pairwise = TRUE)
 
   # Confirm the premise first: genuinely not significant ("-"), not simply
   # never tested (NA) - otherwise this test would be checking the wrong
@@ -1471,4 +1496,67 @@ test_that("25. format_crosstab() still inserts a Sig. diff row when a row WAS pa
   total_col <- which(names(result) == "Total")
   expect_true(is.na(result[["Total"]][diff_row]))
   expect_equal(huxtable::na_string(result)[diff_row, total_col], "")
+})
+
+
+# Tests 26-28 cover groups too small to test, and a predictor level that is
+# itself called "Total".
+
+test_that("26. an untested p-value (groups under 10) is NaN in pivot_crosstab() and 'n/t' in format_crosstab(), with a footnote", {
+  data <- tibble(
+    g = factor(rep(c("A", "B"), each = 6)),
+    x = c(1:6, 20:25)
+  )
+  stats_table <- calc_stats(data, outcomes = "x", predictors = "g", statistics = "mean", pval = TRUE)
+  expect_true(all(str_starts(stats_table$p_method[stats_table$cross_break == "g"], "Not tested")))
+
+  # pivot_crosstab(): NaN, not NA - still a number, but marked as untested.
+  pivoted <- pivot_crosstab(stats_table)[[1]]
+  expect_true(is.nan(pivoted[["p_value (g)"]][pivoted$Statistics %in% "Mean"]))
+
+  # format_crosstab(): "n/t", explained by a footnote.
+  result <- format_crosstab(pivot_crosstab(stats_table))
+  mean_row <- which(result[["Statistics"]] == "Mean")
+  expect_equal(result[["p_value (g)"]][mean_row], "n/t")
+  expect_equal(result[["Variable"]][nrow(result)], "n/t: not tested - too few cases.")
+
+  # format_pvalue() on its own.
+  expect_equal(format_pvalue(NaN), "n/t")
+})
+
+
+test_that("27. pairwise: a group that can't be tested against any other group gets sig_diff 'n/t'", {
+  # East has only 2 cases, so it can't be compared with North or South.
+  data <- tibble(
+    region = factor(c(rep("North", 20), rep("South", 20), rep("East", 2)),
+                    levels = c("North", "South", "East")),
+    y = factor(c(rep("Yes", 16), rep("No", 4), rep("Yes", 4), rep("No", 16), "Yes", "No"))
+  )
+  stats_table <- calc_stats(data, outcomes = "y", predictors = "region", statistics = "perc",
+                            pairwise = TRUE)
+
+  east  <- stats_table %>% filter(p_cat1 == "East")
+  north <- stats_table %>% filter(p_cat1 == "North")
+
+  expect_true(all(east$sig_diff == "n/t"))
+  expect_true(all(east$sig_untested == "a, b"))
+
+  # North was tested against South (different), just not against East.
+  expect_true(all(north$sig_diff == "b"))
+  expect_true(all(north$sig_untested == "c"))
+})
+
+
+test_that("28. a predictor level called 'Total' gets its own column, separate from the real Total", {
+  data <- tibble(
+    grp = factor(rep(c("Total", "Other"), each = 10)),
+    y   = factor(rep(c("Yes", "No"), 10))
+  )
+  result <- pivot_crosstab(calc_stats(data, outcomes = "y", predictors = "grp", statistics = "perc"))[[1]]
+
+  # The real Total first, then the predictor's levels - its "Total" level
+  # labelled with the predictor name so the two can't be confused.
+  expect_equal(names(result)[3:5], c("Total", "Other", "grp: Total"))
+  expect_equal(result$Total[result$row_type == "base"], 20)
+  expect_equal(result[["grp: Total"]][result$row_type == "base"], 10)
 })

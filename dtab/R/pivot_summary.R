@@ -50,20 +50,27 @@ tidy_statistic_description <- function(data) {
 #'
 #' @return A list: `pivoted` (the reshaped tibble, with `row_type`,
 #'   `stat_code`, `block_id`, and `is_variable_row` metadata columns) and
-#'   `bases` (footnote text from `base_description`, via
-#'   `prepare_base_for_table()`). Pass this list straight to
-#'   [format_summary()].
+#'   `bases` (footnote lines from the `o_base`/`p_baseN` columns, via
+#'   `summarise_bases()`). Pass this list straight to [format_summary()].
 #'
 #' @seealso [format_summary()], [calc_stats()]
 #' @keywords internal
 pivot_summary <- function(data) {
 
-  bases <- data %>% pull(base_description) %>% unique() %>% paste0(collapse = " X ")
-  if (any(!is.na(bases))) bases <- bases %>% prepare_base_for_table()
+  # A multicoded question's options are separate outcomes; multicode_group
+  # holds the question. Use it as the outcome so the options share one table.
+  if ("multicode_group" %in% names(data)) {
+    data <- data %>% mutate(outcome = coalesce(multicode_group, outcome)) %>% select(-multicode_group)
+  }
 
   if ("cross_break" %in% names(data)) {
     data <- data %>% filter(cross_break == "Total")
   }
+
+  # Base footnote lines from the o_base / p_base1... columns, then drop
+  # those columns so they don't split rows when reshaping.
+  bases <- summarise_bases(data)
+  data <- data %>% select(-any_of("o_base"), -starts_with("p_base"))
 
   # calc_stats() always includes estimate_se, filled with "-" when conf
   # wasn't requested - drop that placeholder so it isn't carried through
@@ -89,7 +96,7 @@ pivot_summary <- function(data) {
       select(Variable, stat, Estimate, any_of(c("estimate_se", "estimate_ci")),
              Base, row_type, stat_code, block_id, is_variable_row)
 
-    if (!is_categorical) return(data_rows)
+    if (!is_categorical || !block$first_stat[1]) return(data_rows)
 
     # stat/Estimate/etc copied from the first level row so
     # tidy_statistic_description() below has a non-NA value to match on -
@@ -101,6 +108,9 @@ pivot_summary <- function(data) {
   }
 
   pivoted <- data %>%
+    # A categorical variable with several statistics (e.g. perc + count)
+    # gets one label row, above its first statistic's block only.
+    mutate(first_stat = stat == stat[1], .by = outcome) %>%
     mutate(.block = fct_inorder(paste(outcome, stat, sep = "___"))) %>%
     group_split(.block) %>%
     map_df(pivot_one_block) %>%

@@ -7,21 +7,23 @@ pivot/format pair}
 \usage{
 make_table(
   data,
-  outcomes,
+  outcomes = NULL,
   predictors = NULL,
   statistics = c("count", "mean"),
   conf = NULL,
   base = NULL,
-  pval = NULL,
-  multicode = TRUE,
+  pval = FALSE,
+  multicode = NULL,
   pairwise = FALSE,
-  formatted = TRUE
+  formatted = TRUE,
+  ...
 )
 }
 \arguments{
 \item{data}{A data frame, or survey design object.}
 
-\item{outcomes}{Character vector of outcome variable names.}
+\item{outcomes}{Character vector of outcome variable names, or \code{NULL}
+if \code{multicode} gives them all.}
 
 \item{predictors}{\code{NULL} for a Total-only summary, a single variable
 name or list of variable names for a flat crosstab (one or more
@@ -35,11 +37,13 @@ instead.}
 
 \item{conf}{\code{NULL}, \code{"se"}, or \code{"ci"}, passed to \code{\link[=calc_stats]{calc_stats()}}.}
 
-\item{base}{Optional base/filter expression, passed to \code{\link[=calc_stats]{calc_stats()}}.}
+\item{base}{A single string, or made with \code{\link[=base_information]{base_information()}}, passed
+to \code{\link[=calc_stats]{calc_stats()}}.}
 
-\item{pval}{Optional p-value method, passed to \code{\link[=calc_stats]{calc_stats()}}.}
+\item{pval}{If \code{TRUE}, adds p-values, passed to \code{\link[=calc_stats]{calc_stats()}}.}
 
-\item{multicode}{Passed to \code{\link[=calc_stats]{calc_stats()}}.}
+\item{multicode}{\code{NULL}, or a list of multicoded questions, passed to
+\code{\link[=calc_stats]{calc_stats()}}.}
 
 \item{pairwise}{If \code{TRUE}, passed to \code{\link[=calc_stats]{calc_stats()}} - runs letter-based
 pairwise significance testing across predictor levels and adds the
@@ -53,6 +57,9 @@ compare.}
 If \code{FALSE}, stops after the pivot step and returns the matching
 \verb{pivot_*()} function's own list output untouched (no digit formatting
 or presentation-only rows), for further computation.}
+
+\item{...}{Other \code{\link[=calc_stats]{calc_stats()}} arguments, e.g. \code{numeric_test},
+\code{pw_adjust}.}
 }
 \value{
 A styled \code{huxtable}, or (if \code{formatted = FALSE}) the list

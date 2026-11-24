@@ -6,11 +6,11 @@
 \usage{
 make_battery_table(
   data,
-  outcomes,
+  outcomes = NULL,
   statistics = "perc",
   conf = NULL,
   base = NULL,
-  multicode = FALSE,
+  multicode = NULL,
   formatted = TRUE
 )
 }
@@ -19,7 +19,7 @@ make_battery_table(
 
 \item{outcomes}{Character vector of categorical/multicoded outcome
 variable names sharing consistent category levels (e.g. a Likert
-battery).}
+battery), or \code{NULL} if \code{multicode} gives them all.}
 
 \item{statistics}{Exactly one statistic code: \code{"perc"}, \code{"count"},
 \code{"w_perc"}, or \code{"w_count"}.}
@@ -27,9 +27,11 @@ battery).}
 \item{conf}{\code{NULL}, \code{"se"}, or \code{"ci"} - inserted as an extra row under
 each item when requested.}
 
-\item{base}{Optional base/filter expression, passed to \code{\link[=calc_stats]{calc_stats()}}.}
+\item{base}{A single string, or made with \code{\link[=base_information]{base_information()}}, passed
+to \code{\link[=calc_stats]{calc_stats()}}.}
 
-\item{multicode}{Passed to \code{\link[=calc_stats]{calc_stats()}}.}
+\item{multicode}{\code{NULL}, or a list of multicoded questions, passed to
+\code{\link[=calc_stats]{calc_stats()}}.}
 
 \item{formatted}{If \code{TRUE} (default), returns the styled \code{huxtable}.
 If \code{FALSE}, returns \code{\link[=pivot_battery]{pivot_battery()}}'s own list output untouched

@@ -68,7 +68,7 @@ test_that("1. pivot_battery() rejects a predictor", {
     grp   = factor(c("A", "A", "B", "B"))
   )
   stats_table <- calc_stats(data, outcomes = "item1", predictors = "grp",
-                             statistics = "perc", multicode = FALSE)
+                             statistics = "perc")
 
   expect_error(pivot_battery(stats_table), "no room for a predictor")
 })
@@ -84,8 +84,7 @@ test_that("2. pivot_battery() rejects a non-categorical (numeric) outcome", {
 
 test_that("3. pivot_battery() rejects more than one statistic per call", {
   data <- tibble(item1 = factor(c("Agree", "Disagree")))
-  stats_table <- calc_stats(data, outcomes = "item1", statistics = c("perc", "count"),
-                             multicode = FALSE)
+  stats_table <- calc_stats(data, outcomes = "item1", statistics = c("perc", "count"))
 
   expect_error(pivot_battery(stats_table), "exactly one statistic")
 })
@@ -113,7 +112,7 @@ test_that("4. pivot_battery() matches hand-calculated percentages, with a missin
                     levels = c("Disagree", "Neutral", "Agree"))
   )
   stats_table <- calc_stats(data, outcomes = c("item1", "item2"),
-                             statistics = "perc", multicode = FALSE)
+                             statistics = "perc")
   result <- pivot_battery(stats_table)[[1]]
 
   expect_equal(names(result), c("Variable", "Disagree", "Neutral", "Agree", "Base"))
@@ -142,7 +141,7 @@ test_that("5. format_battery() formats percentages as bare whole numbers, a zero
                     levels = c("Disagree", "Neutral", "Agree"))
   )
   stats_table <- calc_stats(data, outcomes = c("item1", "item2"),
-                             statistics = "perc", multicode = FALSE)
+                             statistics = "perc")
   pivoted <- pivot_battery(stats_table)
   result  <- format_battery(pivoted)
   print(huxtable::as_flextable(result))
@@ -215,7 +214,7 @@ test_that("6. pivot_battery()/format_battery() on a larger, realistic-looking 4-
   attr(data$support, "label")   <- "Customer support was helpful"
 
   stats_table <- calc_stats(data, outcomes = c("ease", "value", "recommend", "support"),
-                             statistics = "perc", multicode = FALSE)
+                             statistics = "perc")
   pivoted <- pivot_battery(stats_table)
   raw     <- pivoted[[1]]
   result  <- format_battery(pivoted)
@@ -352,7 +351,7 @@ test_that("8. pivot_battery() strips a shared label stem and renames the stub co
   attr(data$support, "label") <- paste0(shared_stem, " Support")
 
   stats_table <- calc_stats(data, outcomes = c("speed", "price", "support"),
-                             statistics = "perc", multicode = FALSE)
+                             statistics = "perc")
   pivoted <- pivot_battery(stats_table)
   raw     <- pivoted[[1]]
   result  <- format_battery(pivoted)
@@ -429,7 +428,7 @@ test_that("10. label-stem stripping and the blank-header unit column compose cor
   # not "%") independently of the stem logic, which never looks at
   # stat_code at all.
   stats_table <- calc_stats(data, outcomes = c("speed", "price"),
-                             statistics = "count", multicode = FALSE)
+                             statistics = "count")
   pivoted <- pivot_battery(stats_table)
   raw     <- pivoted[[1]]
   result  <- format_battery(pivoted)
@@ -489,9 +488,9 @@ test_that("11. pivot_battery() carries \"<category>__conf\" columns and conf_typ
                     levels = c("Disagree", "Neutral", "Agree"))
   )
   with_conf <- calc_stats(data, outcomes = c("item1", "item2"),
-                           statistics = "perc", conf = "se", multicode = FALSE)
+                           statistics = "perc", conf = "se")
   without_conf <- calc_stats(data, outcomes = c("item1", "item2"),
-                              statistics = "perc", multicode = FALSE)
+                              statistics = "perc")
 
   pivoted_with    <- pivot_battery(with_conf)
   pivoted_without <- pivot_battery(without_conf)
@@ -512,7 +511,7 @@ test_that("12. format_battery() inserts an SE row under each item, reusing the u
                     levels = c("Disagree", "Neutral", "Agree"))
   )
   stats_table <- calc_stats(data, outcomes = c("item1", "item2"),
-                             statistics = "perc", conf = "se", multicode = FALSE)
+                             statistics = "perc", conf = "se")
   pivoted <- pivot_battery(stats_table)
   result  <- format_battery(pivoted)
   print(huxtable::as_flextable(result))
@@ -556,7 +555,7 @@ test_that("13. format_battery() with conf = \"ci\" labels the inserted row \"95%
                     levels = c("Disagree", "Neutral", "Agree"))
   )
   stats_table <- calc_stats(data, outcomes = "item1", statistics = "perc",
-                             conf = "ci", multicode = FALSE)
+                             conf = "ci")
   result <- format_battery(pivot_battery(stats_table))
   print(huxtable::as_flextable(result))
 
