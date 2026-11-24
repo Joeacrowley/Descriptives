@@ -28,8 +28,9 @@ set instead, use \code{\link[=pivot_nested_crosstab]{pivot_nested_crosstab()}}, 
 Supports \code{calc_stats(pairwise = TRUE)} output: a \code{legend} (returned as
 the 6th list element) and \code{"<level>__sigdiff"} columns feed
 \code{\link[=format_crosstab]{format_crosstab()}}'s inserted legend row and Sig. diff row. A
-categorical variable is limited to exactly one statistic per call;
-a numeric variable can have more than one (e.g. mean + median).
+variable can have more than one statistic (e.g. perc + count, or mean +
+median): each statistic gets its own block of rows, and a categorical
+variable's label row is shown once, above the first.
 }
 \seealso{
 \code{\link[=format_crosstab]{format_crosstab()}}, \code{\link[=pivot_nested_crosstab]{pivot_nested_crosstab()}}, \code{\link[=calc_stats]{calc_stats()}}
