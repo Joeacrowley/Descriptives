@@ -90,7 +90,7 @@ pw_test_cats <- function(outcome, outcome_level, predictor, data,
   if (nested) {
     data <- data |>
       mutate(across(all_of(predictor), haven::as_factor)) |>
-      mutate("{predictor_var}" := fct_cross(!!!syms(predictor), sep = ":", keep_empty = FALSE))
+      mutate("{predictor_var}" := fct_cross(!!!syms(predictor), sep = "__:__", keep_empty = FALSE))
   }
 
   if (is.null(level_comparisons)) {
@@ -99,8 +99,8 @@ pw_test_cats <- function(outcome, outcome_level, predictor, data,
     }
 
   decorate_level <- function(level_string) {
-    parts <- str_split_1(level_string, fixed(":"))
-    paste(paste(predictor, parts, sep = " - "), collapse = ": ")
+    parts <- str_split_1(level_string, fixed("__:__"))
+    paste(paste(predictor, parts, sep = "___"), collapse = "__:__")
   }
 
   prop_tests <- map_dfr(level_comparisons, \(pr) {
@@ -122,7 +122,7 @@ pw_test_cats <- function(outcome, outcome_level, predictor, data,
     )
 
     pair_test |>
-      mutate(comparison = paste(pr, collapse = " vs "), .before = 1)
+      mutate(comparison = paste(pr, collapse = "__vs__"), .before = 1)
   }) |>
     mutate(p_adj = p.adjust(p.value, method = p_adjust_method)) |>
     select(comparison, estimate, p.value, p_adj, method) |>
@@ -133,9 +133,16 @@ pw_test_cats <- function(outcome, outcome_level, predictor, data,
       .before = 1
     ) |>
     mutate(
-      comparison_group_1 = map_chr(str_split_i(comparison, " vs ", 1), decorate_level),
-      comparison_group_2 = map_chr(str_split_i(comparison, " vs ", 2), decorate_level),
+      comparison_group_1 = map_chr(str_split_i(comparison, fixed("__vs__"), 1), decorate_level),
+      comparison_group_2 = map_chr(str_split_i(comparison, fixed("__vs__"), 2), decorate_level),
       .after = comparison
+    ) |>
+    mutate(
+      g1_p_cat1 = str_split_i(str_split_i(comparison, fixed("__vs__"), 1), fixed("__:__"), 1),
+      g1_p_cat2 = str_split_i(str_split_i(comparison, fixed("__vs__"), 1), fixed("__:__"), 2),
+      g2_p_cat1 = str_split_i(str_split_i(comparison, fixed("__vs__"), 2), fixed("__:__"), 1),
+      g2_p_cat2 = str_split_i(str_split_i(comparison, fixed("__vs__"), 2), fixed("__:__"), 2),
+      .after = comparison_group_2
     ) |>
     mutate(nest = nest_val, predictor = main_pred_val, .after = outcome) |>
     select(-comparison)
@@ -192,7 +199,7 @@ pw_test_means <- function(outcome, predictor, data,
   if (nested) {
     data <- data |>
       mutate(across(all_of(predictor), haven::as_factor)) |>
-      mutate("{predictor_var}" := fct_cross(!!!syms(predictor), sep = ":", keep_empty = FALSE))
+      mutate("{predictor_var}" := fct_cross(!!!syms(predictor), sep = "__:__", keep_empty = FALSE))
   }
 
   if (is.null(level_comparisons)) {
@@ -201,8 +208,8 @@ pw_test_means <- function(outcome, predictor, data,
     }
 
   decorate_level <- function(level_string) {
-    parts <- str_split_1(level_string, fixed(":"))
-    paste(paste(predictor, parts, sep = " - "), collapse = ": ")
+    parts <- str_split_1(level_string, fixed("__:__"))
+    paste(paste(predictor, parts, sep = "___"), collapse = "__:__")
   }
 
   mean_tests <- map_dfr(level_comparisons, \(pr) {
@@ -224,7 +231,7 @@ pw_test_means <- function(outcome, predictor, data,
     )
 
     pair_test |>
-      mutate(comparison = paste(pr, collapse = " vs "), .before = 1)
+      mutate(comparison = paste(pr, collapse = "__vs__"), .before = 1)
   }) |>
     mutate(p_adj = p.adjust(p.value, method = "holm")) |>
     select(comparison, estimate, p.value, p_adj, method) |>
@@ -235,9 +242,16 @@ pw_test_means <- function(outcome, predictor, data,
       .before = 1
     ) |>
     mutate(
-      comparison_group_1 = map_chr(str_split_i(comparison, " vs ", 1), decorate_level),
-      comparison_group_2 = map_chr(str_split_i(comparison, " vs ", 2), decorate_level),
+      comparison_group_1 = map_chr(str_split_i(comparison, fixed("__vs__"), 1), decorate_level),
+      comparison_group_2 = map_chr(str_split_i(comparison, fixed("__vs__"), 2), decorate_level),
       .after = comparison
+    ) |>
+    mutate(
+      g1_p_cat1 = str_split_i(str_split_i(comparison, fixed("__vs__"), 1), fixed("__:__"), 1),
+      g1_p_cat2 = str_split_i(str_split_i(comparison, fixed("__vs__"), 1), fixed("__:__"), 2),
+      g2_p_cat1 = str_split_i(str_split_i(comparison, fixed("__vs__"), 2), fixed("__:__"), 1),
+      g2_p_cat2 = str_split_i(str_split_i(comparison, fixed("__vs__"), 2), fixed("__:__"), 2),
+      .after = comparison_group_2
     ) |>
     mutate(nest = nest_val, predictor = main_pred_val, .after = outcome) |>
     select(-comparison)
@@ -314,6 +328,10 @@ merge_p_letters <- function(one_pw_test_set, calc_stats_df, crit_lev = 0.05,
       mutate(
         ref_group = x,
         comparison = if_else(comparison_group_1 == x, comparison_group_2, comparison_group_1),
+        p_cat1           = if_else(comparison_group_1 == x, g1_p_cat1, g2_p_cat1),
+        p_cat2           = if_else(comparison_group_1 == x, g1_p_cat2, g2_p_cat2),
+        comparison_pcat1 = if_else(comparison_group_1 == x, g2_p_cat1, g1_p_cat1),
+        comparison_pcat2 = if_else(comparison_group_1 == x, g2_p_cat2, g1_p_cat2),
         .after = predictor)
   }) %>% bind_rows()
 
@@ -323,45 +341,27 @@ merge_p_letters <- function(one_pw_test_set, calc_stats_df, crit_lev = 0.05,
 
     merge_prep3 <- merge_prep2 %>%
       mutate(cross_break = predictor, .before = 1) %>%
-      mutate(
-        p_cat1 = str_replace_all(ref_group, paste0(predictor, " - "), ""),
-        p_cat2 = "Total",
-        comparison_pcat1 = str_replace_all(comparison, paste0(predictor, " - "), ""),
-        comparison_pcat2 = "Total",
-        group1 = p_cat1, group2 = comparison_pcat1,
-        .after = comparison
-      )
+      mutate(p_cat2 = "Total", comparison_pcat2 = "Total")
   } else {
 
     merge_prep3 <- merge_prep2 %>%
-      mutate(cross_break = paste0(nest, "_X_", predictor), .before = 1) %>%
-      mutate(
-        p_cat1 = str_replace_all(str_split_i(ref_group, ": ", 1), paste0(nest, " - "), ""),
-        p_cat2 = str_replace_all(str_split_i(ref_group, ": ", 2), paste0(predictor, " - "), ""),
-        comparison_pcat1 = str_replace_all(str_split_i(comparison, ": ", 1), paste0(nest, " - "), ""),
-        comparison_pcat2 = str_replace_all(str_split_i(comparison, ": ", 2), paste0(predictor, " - "), ""),
-        group1 = paste0(p_cat1, "_X_", p_cat2), group2 = paste0(comparison_pcat1, "_X_", comparison_pcat2),
-        .after = comparison
-      )
+      mutate(cross_break = paste0(nest, "_X_", predictor), .before = 1)
   }
 
   has_p_cat2 <- "p_cat2" %in% names(calc_stats_df)
 
   letters_match <- calc_stats_df %>%
     filter(cross_break == merge_prep3$cross_break %>% unique) %>%
-    mutate(group1 = if (has_p_cat2) {
-      str_replace_all(paste0(p_cat1, "_X_", p_cat2), "_X_Total", "")
-    } else {
-      p_cat1
-    }) %>%
-    select(cross_break, outcome, o_cat, group1, sig_letter, any_of("stat"))
+    mutate(p_cat2 = if (has_p_cat2) p_cat2 else "Total") %>%
+    mutate(across(c(p_cat1, p_cat2), as.character)) %>%
+    select(cross_break, outcome, o_cat, p_cat1, p_cat2, sig_letter, any_of("stat"))
 
-  letter_lookup <- letters_match$sig_letter %>% unique
-  names(letter_lookup) <- letters_match$group1 %>% unique
+  comparison_letters <- letters_match %>%
+    distinct(comparison_pcat1 = p_cat1, comparison_pcat2 = p_cat2, comparison_letter = sig_letter)
 
   merge_prep4 <- full_join(merge_prep3, letters_match) %>%
     relocate(sig_letter, .after = cross_break) %>%
-    mutate(comparison_letter = letter_lookup[group2])
+    left_join(comparison_letters, by = c("comparison_pcat1", "comparison_pcat2"))
 
   p_cats_in_cs_df <- calc_stats_df %>% select(contains("p_cat")) %>% names
 
