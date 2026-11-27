@@ -894,3 +894,34 @@ test_that("45. calc_stats() computes a nested p-value per outer level (and doesn
   expect_equal(length(unique(a_pvals)), 1)
   expect_equal(length(unique(b_pvals)), 1)
 })
+
+
+test_that("46. calc_stats() gives unweighted percentages a Wilson CI: within 0-100, and not '0 - 0' for an empty category", {
+  # Group A: 1 Yes out of 40, where p +/- 1.96 * SE would go below 0.
+  # Nobody in either group answered "Maybe".
+  data <- tibble(
+    answer = factor(c("Yes", rep("No", 39), rep("Yes", 20), rep("No", 20)),
+                    levels = c("Yes", "No", "Maybe")),
+    group  = factor(rep(c("A", "B"), each = 40))
+  )
+
+  result <- calc_stats(data, outcomes = "answer", predictors = "group",
+                       statistics = "perc", conf = "ci")
+  group_a <- result %>% filter(cross_break == "group", p_cat1 == "A")
+
+  # Matches base R's Wilson interval exactly.
+  a_yes  <- group_a %>% filter(o_cat == "Yes")
+  wilson <- prop.test(1, 40, correct = FALSE)$conf.int
+  expect_equal(a_yes$estimate_low, wilson[1])
+  expect_equal(a_yes$estimate_upp, wilson[2])
+
+  # The empty category: from 0 up to a real upper limit, not "0 - 0".
+  a_maybe <- group_a %>% filter(o_cat == "Maybe")
+  expect_equal(a_maybe$estimate, 0)
+  expect_equal(a_maybe$estimate_low, 0)
+  expect_equal(a_maybe$estimate_upp, prop.test(0, 40, correct = FALSE)$conf.int[2])
+  expect_gt(a_maybe$estimate_upp, 0)
+
+  # Every interval stays within 0-1.
+  expect_true(all(result$estimate_low >= 0 & result$estimate_upp <= 1))
+})

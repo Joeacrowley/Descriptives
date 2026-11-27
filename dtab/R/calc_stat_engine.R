@@ -105,6 +105,14 @@ one_table <- function(data, outcome, predictor, stat, spec, conf) {
       ungroup()
   }
 
+  # Unweighted percentages: the 0% rows just added get a Wilson interval
+  # too (0 up to a small upper limit), rather than "0 - 0".
+  if (categorical && stat == "perc") {
+    tbl <- tbl %>%
+      mutate(estimate_low = wilson_ci(unweighted_n, base)$low,
+             estimate_upp = wilson_ci(unweighted_n, base)$upp)
+  }
+
   # Numeric stats have no real category, so o_cat holds the stat name.
   if (!categorical) tbl <- tbl %>% mutate(o_cat = .env$stat)
 

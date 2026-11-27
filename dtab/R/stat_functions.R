@@ -158,13 +158,22 @@ stat_w_sd <- function(grouped, outcome, conf) {
 # Categorical: `grouped` is grouped by predictor(s) + outcome. "drop_last"
 # leaves it grouped by the predictor(s), so sums are within each predictor group.
 
+# Wilson interval for x cases out of n, from base R's prop.test(). Unlike
+# p +/- 1.96 * SE, it stays within 0-1 and still has some width at 0% or
+# 100%. correct = FALSE gives the Wilson interval; suppressWarnings() hides
+# the "Chi-squared approximation may be incorrect" warning for small counts.
+wilson_ci <- function(x, n) {
+  ci <- map2(x, n, \(x, n) suppressWarnings(stats::prop.test(x, n, correct = FALSE))$conf.int)
+  list(low = map_dbl(ci, 1), upp = map_dbl(ci, 2))
+}
+
 stat_perc <- function(grouped, outcome, conf) {
   grouped %>%
     summarise(unweighted_n = n(), .groups = "drop_last") %>%
     mutate(estimate     = unweighted_n / sum(unweighted_n),
            estimate_se  = sqrt(estimate * (1 - estimate) / sum(unweighted_n)),
-           estimate_low = estimate - 1.96 * estimate_se,
-           estimate_upp = estimate + 1.96 * estimate_se,
+           estimate_low = wilson_ci(unweighted_n, sum(unweighted_n))$low,
+           estimate_upp = wilson_ci(unweighted_n, sum(unweighted_n))$upp,
            base         = sum(unweighted_n)) %>%
     ungroup()
 }
