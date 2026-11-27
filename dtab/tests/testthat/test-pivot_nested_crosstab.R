@@ -72,7 +72,7 @@
 # pairwise differences are close to guaranteed without needing to hand-solve
 # the exact test statistic - these tests check structure (legend content
 # matches pivot_nested_crosstab()'s own legend output, not hardcoded
-# letters; a Sig. diff row appears; SE rows are suppressed), not exact
+# letters; a Sig. diff row appears under the SE row), not exact
 # letter assignment, the same restraint test 20 in test_pivot_crosstab.R
 # uses for the same reason (which letter lands on which column depends on
 # row order inside assign_sig_letters(), not something worth pinning to a
@@ -681,7 +681,7 @@ test_that("14. pivot_nested_crosstab() carries a legend and __sigdiff columns on
 })
 
 
-test_that("15. format_nested_crosstab() shows a legend row right under the 4-row header, a Sig. diff row, and suppresses SE rows when pairwise = TRUE", {
+test_that("15. format_nested_crosstab() shows a legend row right under the 4-row header, a Sig. diff row, and keeps SE rows when pairwise = TRUE", {
   design <- build_nested_pairwise_design()
 
   stats_table <- calc_stats(design, outcomes = "y", predictors = list(c("sex", "age_group")),
@@ -707,23 +707,22 @@ test_that("15. format_nested_crosstab() shows a legend row right under the 4-row
     expect_equal(result[[col_idx]][5], legend$sig_letter[i])
   }
 
-  # No SE row anywhere - pairwise = TRUE suppresses conf display entirely,
-  # same rule pivot_crosstab() applies.
-  expect_false("SE" %in% result[["Statistics"]])
+  # SE rows are shown alongside the pairwise results.
+  expect_true("SE" %in% result[["Statistics"]])
 
-  # At least one Sig. diff row exists, and every one sits directly under a
-  # real data row ("Yes" or "No") - not asserting Yes specifically comes
+  # At least one Sig. diff row exists, and every one sits two rows under a
+  # real data row ("Yes" or "No"), below its SE row - not asserting Yes specifically comes
   # first (a real test run showed "No" actually sorts first here despite
   # the explicit levels = c("Yes", "No") on the factor - some step upstream
   # of format_nested_crosstab() isn't preserving that declared order, not
   # something this test needs to pin down or assume either way). What
   # matters for this test is the POSITIONAL invariant - a sigdiff row is
-  # always immediately below its own data row - true regardless of which
+  # always two rows below its own data row - true regardless of which
   # category happened to land first.
   data_row_positions <- which(result[["Variable"]] %in% c("Yes", "No"))
   sigdiff_rows        <- which(result[["Statistics"]] == "Sig. diff")
   expect_true(length(sigdiff_rows) >= 1)
-  expect_true(all((sigdiff_rows - 1) %in% data_row_positions))
+  expect_true(all((sigdiff_rows - 2) %in% data_row_positions))
 })
 
 
@@ -750,7 +749,7 @@ test_that("16. format_nested_crosstab() renders a fuller, weighted, pairwise + p
   print(result %>% huxtable::as_flextable())
 
   expect_true("Column reference" %in% result[["Variable"]])
-  expect_false("SE" %in% result[["Statistics"]])
+  expect_true("SE" %in% result[["Statistics"]])
   expect_true(any(!is.na(result[["Statistics"]]) & result[["Statistics"]] == "Sig. diff"))
 })
 
@@ -807,7 +806,7 @@ test_that("17. pivot_nested_crosstab() carries a legend and __sigdiff columns fo
 })
 
 
-test_that("18. format_nested_crosstab() shows a legend row, a Sig. diff row, and suppresses SE for a nested w_mean statistic", {
+test_that("18. format_nested_crosstab() shows a legend row, a Sig. diff row, and keeps SE for a nested w_mean statistic", {
   design <- build_nested_mean_design()
 
   stats_table <- calc_stats(design, outcomes = "score", predictors = list(c("sex", "age_group")),
@@ -828,12 +827,12 @@ test_that("18. format_nested_crosstab() shows a legend row, a Sig. diff row, and
     expect_equal(result[[col_idx]][5], legend$sig_letter[i])
   }
 
-  expect_false("SE" %in% result[["Statistics"]])
+  expect_true("SE" %in% result[["Statistics"]])
 
   # Numeric variable: "score" is its own data row's Variable text (no label
   # row, unlike test 15's categorical "Yes"/"No") - a single data row here
   # (one statistic requested), so the Sig. diff row (if any pair differs)
-  # sits directly under it. The relocated base row ALSO reads Variable ==
+  # sits under its SE row. The relocated base row ALSO reads Variable ==
   # "score" (same reasoning as test 23's own fix in test_pivot_crosstab.R -
   # format_nested_crosstab()'s Variable+Statistics merge_cells() on the base
   # row copies that same text into Statistics too), so disambiguated the
@@ -842,7 +841,7 @@ test_that("18. format_nested_crosstab() shows a legend row, a Sig. diff row, and
   score_row    <- which(result[["Variable"]] == "score" & result[["Statistics"]] == "Mean (w)")
   sigdiff_rows <- which(result[["Statistics"]] == "Sig. diff")
   expect_true(length(sigdiff_rows) >= 1)
-  expect_true(all((sigdiff_rows - 1) %in% score_row))
+  expect_true(all((sigdiff_rows - 2) %in% score_row))
 })
 
 
@@ -865,7 +864,7 @@ test_that("19. format_nested_crosstab() renders a fuller, weighted, pairwise + p
   print(result %>% huxtable::as_flextable())
 
   expect_true("Column reference" %in% result[["Variable"]])
-  expect_false("SE" %in% result[["Statistics"]])
+  expect_true("SE" %in% result[["Statistics"]])
   expect_true(any(!is.na(result[["Statistics"]]) & result[["Statistics"]] == "Sig. diff"))
 })
 
@@ -923,14 +922,14 @@ test_that("20. format_nested_crosstab() still inserts a (blank) Sig. diff row wh
   expect_true("Sig. diff" %in% result[["Statistics"]])
 
   # Same positional invariant test 15 already checks - every Sig. diff row
-  # sits directly under its own data row - plus, new to this test, that
+  # sits two rows under its own data row (below its SE row) - plus, new to this test, that
   # those rows are actually blank (not "-", not a real letter) on every
   # level column, confirming this is the "tested, nothing found" case
   # specifically, not some other path.
   data_row_positions <- which(result[["Variable"]] %in% c("Yes", "No"))
   sigdiff_rows        <- which(result[["Statistics"]] == "Sig. diff")
   expect_true(length(sigdiff_rows) >= 1)
-  expect_true(all((sigdiff_rows - 1) %in% data_row_positions))
+  expect_true(all((sigdiff_rows - 2) %in% data_row_positions))
 
   level_cols <- setdiff(names(result), c("Variable", "Statistics"))
   level_cols <- level_cols[!grepl("^p_value", level_cols)]

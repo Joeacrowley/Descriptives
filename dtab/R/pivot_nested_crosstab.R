@@ -407,7 +407,36 @@ format_nested_crosstab <- function(pivot_result) {
     data[[col]] <- format_pvalue(data[[col]])
   }
 
-  if (!is.na(conf_type) && length(conf_cols) > 0 && !has_pairwise) {
+  # Insert a "sigdiff" row under every pairwise-tested data row. Done
+  # before the conf rows, so the conf row ends up directly under its data row.
+  if (has_pairwise) {
+    data <- map_df(seq_len(nrow(data)), function(i) {
+      row <- data[i, , drop = FALSE]
+      sd_values <- unlist(row[, sigdiff_cols, drop = FALSE])
+      has_sigdiff <- row$row_type == "data" && any(!is.na(sd_values))
+
+      if (!has_sigdiff) return(row %>% select(-all_of(sigdiff_cols)))
+
+      sigdiff_row <- row %>%
+        mutate(Variable = "", Statistics = "Sig. diff",
+               row_type = "sigdiff", stat_code = NA_character_)
+      for (lc in col_order) {
+        sc <- paste0(lc, "__sigdiff")
+        if (sc %in% names(row)) sigdiff_row[[lc]] <- row[[sc]]
+      }
+      for (pc in pval_cols) sigdiff_row[[pc]] <- NA_character_
+
+      bind_rows(row %>% select(-all_of(sigdiff_cols)),
+                sigdiff_row %>% select(-all_of(sigdiff_cols)))
+    })
+  } else {
+    data <- data %>% select(-any_of(sigdiff_cols))
+  }
+
+  # Insert one extra "conf" row under every data row with a non-NA conf
+  # value. Done after the Sig. diff rows, so it lands between the data row
+  # and its Sig. diff row.
+  if (!is.na(conf_type) && length(conf_cols) > 0) {
     conf_label <- if (conf_type == "ci") "95% CI" else "SE"
 
     data <- map_df(seq_len(nrow(data)), function(i) {
@@ -431,30 +460,6 @@ format_nested_crosstab <- function(pivot_result) {
     })
   } else {
     data <- data %>% select(-any_of(conf_cols))
-  }
-
-  if (has_pairwise) {
-    data <- map_df(seq_len(nrow(data)), function(i) {
-      row <- data[i, , drop = FALSE]
-      sd_values <- unlist(row[, sigdiff_cols, drop = FALSE])
-      has_sigdiff <- row$row_type == "data" && any(!is.na(sd_values))
-
-      if (!has_sigdiff) return(row %>% select(-all_of(sigdiff_cols)))
-
-      sigdiff_row <- row %>%
-        mutate(Variable = "", Statistics = "Sig. diff",
-               row_type = "sigdiff", stat_code = NA_character_)
-      for (lc in col_order) {
-        sc <- paste0(lc, "__sigdiff")
-        if (sc %in% names(row)) sigdiff_row[[lc]] <- row[[sc]]
-      }
-      for (pc in pval_cols) sigdiff_row[[pc]] <- NA_character_
-
-      bind_rows(row %>% select(-all_of(sigdiff_cols)),
-                sigdiff_row %>% select(-all_of(sigdiff_cols)))
-    })
-  } else {
-    data <- data %>% select(-any_of(sigdiff_cols))
   }
 
   if (!is.null(legend) && nrow(legend) > 0) {

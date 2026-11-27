@@ -393,9 +393,38 @@ format_crosstab <- function(pivot_result) {
     }
   }
 
+  # Insert a "sigdiff" row under every pairwise-tested data row. Done
+  # before the conf rows, so the conf row ends up directly under its data
+  # row. Empty string ("tested, nothing significant") counts as a real
+  # result and gets a row; NA ("never tested") is the only case that skips it.
+  if (has_pairwise) {
+    data <- map_df(seq_len(nrow(data)), function(i) {
+      row <- data[i, , drop = FALSE]
+      diff_values <- unlist(row[, sigdiff_cols, drop = FALSE])
+      has_diff <- row$row_type == "data" && any(!is.na(diff_values))
+
+      if (!has_diff) return(row %>% select(-all_of(sigdiff_cols)))
+
+      sigdiff_row <- row %>%
+        mutate(Variable = "", Statistics = "Sig. diff",
+               row_type = "sigdiff", stat_code = NA_character_)
+      for (lc in all_level_cols) {
+        sc <- paste0(lc, "__sigdiff")
+        if (sc %in% names(row)) sigdiff_row[[lc]] <- row[[sc]]
+      }
+      for (pc in pval_cols) sigdiff_row[[pc]] <- NA_character_
+
+      bind_rows(row %>% select(-all_of(sigdiff_cols)),
+                sigdiff_row %>% select(-all_of(sigdiff_cols)))
+    })
+  } else {
+    data <- data %>% select(-any_of(sigdiff_cols))
+  }
+
   # Insert one extra "conf" row under every data row with a non-NA conf
-  # value - suppressed entirely when pairwise sig_diff is shown instead.
-  if (!is.na(conf_type) && length(conf_cols) > 0 && !has_pairwise) {
+  # value. Done after the Sig. diff rows, so it lands between the data row
+  # and its Sig. diff row.
+  if (!is.na(conf_type) && length(conf_cols) > 0) {
     conf_label <- if (conf_type == "ci") "95% CI" else "SE"
 
     data <- map_df(seq_len(nrow(data)), function(i) {
@@ -419,33 +448,6 @@ format_crosstab <- function(pivot_result) {
     })
   } else {
     data <- data %>% select(-any_of(conf_cols))
-  }
-
-  # Same mechanic for a "sigdiff" row. Empty string ("tested, nothing
-  # significant") counts as a real result and gets a row; NA ("never
-  # tested") is the only case that skips it.
-  if (has_pairwise) {
-    data <- map_df(seq_len(nrow(data)), function(i) {
-      row <- data[i, , drop = FALSE]
-      diff_values <- unlist(row[, sigdiff_cols, drop = FALSE])
-      has_diff <- row$row_type == "data" && any(!is.na(diff_values))
-
-      if (!has_diff) return(row %>% select(-all_of(sigdiff_cols)))
-
-      sigdiff_row <- row %>%
-        mutate(Variable = "", Statistics = "Sig. diff",
-               row_type = "sigdiff", stat_code = NA_character_)
-      for (lc in all_level_cols) {
-        sc <- paste0(lc, "__sigdiff")
-        if (sc %in% names(row)) sigdiff_row[[lc]] <- row[[sc]]
-      }
-      for (pc in pval_cols) sigdiff_row[[pc]] <- NA_character_
-
-      bind_rows(row %>% select(-all_of(sigdiff_cols)),
-                sigdiff_row %>% select(-all_of(sigdiff_cols)))
-    })
-  } else {
-    data <- data %>% select(-any_of(sigdiff_cols))
   }
 
   # Legend row, built after digit-formatting has already made every level
