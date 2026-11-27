@@ -35,8 +35,10 @@ tables <- list(
 # Every sheet is crosstabbed by these.
 predictors <- c("RSex", "RAgeCat")
 
-# Columns with a base below this show "*" instead of their statistics.
-min_base <- 20
+# Base suppression: when TRUE, columns with a base below min_base show "*"
+# instead of their statistics. FALSE shows every estimate.
+suppress_low_bases <- TRUE
+min_base           <- 20
 
 out_file <- here::here("oneway_crosstabs.xlsx")
 
@@ -56,7 +58,7 @@ make_crosstab <- function(outcomes) {
   # level, e.g. "RSex: Male". Predictors sharing level names stay apart.
   stats <- stats %>%
     mutate(column = if_else(cross_break == "Total", "Total", paste0(cross_break, ": ", p_cat1)),
-           suppressed = base < min_base)
+           suppressed = suppress_low_bases & base < min_base)
 
   # Columns in the order calc_stats() gives them: Total, then each predictor.
   column_order <- unique(stats$column)
@@ -120,15 +122,20 @@ make_crosstab <- function(outcomes) {
     bind_rows(title_row, body_rows, base_row, tibble(Variable = NA_character_))
   })
 
-  # A note explaining "*", after the last outcome's blank row - only if
-  # something on this sheet was suppressed. Otherwise drop that blank row.
-  suppression_note <- paste0("* Base below ", min_base, ": estimates not shown.")
+  # Notes under the table, after the last outcome's blank row. The "*" note
+  # only appears if something on this sheet was suppressed.
+  notes <- c(
+    "Notes",
+    "Sig. diff: the letters of the columns, within the same predictor, whose percentage is significantly different from this column's (p < 0.05). Each column's letter is in the Column reference row, and letters restart for each predictor.",
+    "-  Tested against the other columns in its predictor, with no significant difference.",
+    "n/t  Not tested: too few cases. A column needs at least 10 people, and at least 3 who did and 3 who didn't give that answer.",
+    "Where only some comparisons could be tested, the letters cover the tested ones only.",
+    "Predictors with more than 26 columns carry on with aa, ab, ac and so on.",
+    "Comparisons use t-tests, with p-values adjusted for multiple comparisons (Benjamini-Hochberg).",
+    if (any(stats$suppressed)) paste0("*  Base below ", min_base, ": estimates not shown.")
+  )
 
-  if (any(stats$suppressed)) {
-    outcome_rows <- bind_rows(outcome_rows, tibble(Variable = suppression_note))
-  } else {
-    outcome_rows <- head(outcome_rows, -1)
-  }
+  outcome_rows <- bind_rows(outcome_rows, tibble(Variable = notes))
 
   bind_rows(letters_row, outcome_rows) %>%
     select(Variable, Statistics, all_of(column_order)) %>%
@@ -136,7 +143,8 @@ make_crosstab <- function(outcomes) {
       Variable %in% "Column reference"   ~ "letters",
       Variable %in% stats$o_lab          ~ "title",
       Variable %in% "Base"               ~ "base",
-      Variable %in% suppression_note     ~ "note",
+      Variable %in% "Notes"              ~ "notes_title",
+      Variable %in% notes                ~ "note",
       Statistics %in% "Count"            ~ "count",
       is.na(Variable) & is.na(Statistics) ~ "blank",
       TRUE                               ~ "other"
@@ -166,15 +174,19 @@ write_crosstab_sheet <- function(wb, sheet, table) {
                        rows = rows, cols = cols, gridExpand = TRUE, stack = TRUE)
   }
 
-  # Every cell: text at the top, wrapped if it doesn't fit.
-  style(valign = "top", wrapText = TRUE, rows = 1:n_rows, cols = 1:n_cols)
+  # The notes at the bottom aren't wrapped: each runs along one line, across
+  # the empty cells to its right.
+  note_rows <- c(rows_of("notes_title"), rows_of("note"))
+
+  # Every other cell: text at the top, wrapped if it doesn't fit.
+  style(valign = "top", wrapText = TRUE, rows = setdiff(1:n_rows, note_rows), cols = 1:n_cols)
 
   # Numbers right-aligned, header included.
   style(halign = "right", rows = 1:n_rows, cols = num_cols)
 
   # Thin light lines around every cell of the table (not the blank rows
-  # between outcomes, or the note), so rows and columns are easy to follow.
-  table_rows <- setdiff(1:n_rows, c(rows_of("blank"), rows_of("note")))
+  # between outcomes, or the notes), so rows and columns are easy to follow.
+  table_rows <- setdiff(1:n_rows, c(rows_of("blank"), note_rows))
   style(border = "TopBottomLeftRight", borderColour = "#BFBFBF", borderStyle = "thin",
         rows = table_rows, cols = 1:n_cols)
 
@@ -217,13 +229,16 @@ write_crosstab_sheet <- function(wb, sheet, table) {
   # Base rows in italics.
   style(textDecoration = "italic", rows = rows_of("base"), cols = 1:n_cols)
 
-  # The suppression note in italics.
+  # Notes: the "Notes" heading in bold, the notes in italics.
+  style(textDecoration = "bold", rows = rows_of("notes_title"), cols = 1)
   style(textDecoration = "italic", rows = rows_of("note"), cols = 1)
 
   # Column widths: enough for the longest entry, up to a limit (longer text
   # wraps). Never narrower than the longest single word, so words don't split.
+  # The notes are left out, as they run across the columns.
   max_widths <- c(45, 12, rep(20, n_cols - 2))
   cells      <- rbind(names(table), as.matrix(table))
+  cells[note_rows, ] <- NA
 
   col_widths <- map_dbl(seq_len(n_cols), function(col) {
     text <- na.omit(cells[, col])
