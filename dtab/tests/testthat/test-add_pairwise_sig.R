@@ -364,3 +364,75 @@ test_that("21. calc_stats(pairwise = TRUE) mixing perc and w_perc in one call ke
   expect_equal(nrow(with_pairwise), nrow(without_pairwise))
   expect_setequal(unique(with_pairwise$stat), c("perc", "w_perc"))
 })
+
+
+# ---- awkward predictor levels ---------------------------------------------------
+
+# Pairwise results are matched back to calc_stats()'s rows by each group's
+# levels. Levels containing ":", " vs " or "<predictor> - ", and a nested
+# level called "Total", once broke that matching: extra empty rows appeared
+# and the real rows lost their letters. Each test checks the awkward levels
+# get exactly the same letters as the same data with plain level names.
+
+# 1,000 people: answer (Yes / No) by sex and region. Region 1 is 65% Yes,
+# region 2 35%, region 3 50%, so every pair of regions differs.
+awkward_level_data <- function(region_levels) {
+  tribble(
+    ~region, ~sex,     ~answer, ~n,
+    1,       "Male",   "Yes",   119,
+    1,       "Male",   "No",     51,
+    1,       "Female", "Yes",   102,
+    1,       "Female", "No",     68,
+    2,       "Male",   "Yes",    51,
+    2,       "Male",   "No",    119,
+    2,       "Female", "Yes",    68,
+    2,       "Female", "No",    102,
+    3,       "Male",   "Yes",    80,
+    3,       "Male",   "No",     80,
+    3,       "Female", "Yes",    80,
+    3,       "Female", "No",     80
+  ) %>%
+    uncount(n) %>%
+    mutate(region = factor(region_levels[region], levels = region_levels),
+           sex    = factor(sex, levels = c("Male", "Female")),
+           answer = factor(answer, levels = c("Yes", "No")))
+}
+
+# The letters calc_stats() gives, flat and nested both ways round - without
+# the level names themselves, so awkward and plain results can be compared.
+pairwise_letters <- function(region_levels) {
+  calc_stats(awkward_level_data(region_levels), outcomes = "answer",
+             predictors = list("region", c("sex", "region"), c("region", "sex")),
+             statistics = "perc", pairwise = TRUE) %>%
+    filter(cross_break != "Total") %>%
+    select(cross_break, o_cat, sig_letter, sig_diff, sig_untested)
+}
+
+plain_letters <- pairwise_letters(c("North", "South", "East"))
+
+
+test_that("22. pairwise letters are right when predictor levels contain ':'", {
+  colon_letters <- pairwise_letters(c("Area: North", "Area: South", "Area: East"))
+
+  # The plain version really does have letters to compare against.
+  expect_true(any(str_detect(plain_letters$sig_diff, "[a-z]"), na.rm = TRUE))
+  expect_equal(colon_letters, plain_letters)
+})
+
+
+test_that("23. pairwise letters are right when a predictor level contains ' vs '", {
+  vs_letters <- pairwise_letters(c("North vs West", "South", "East"))
+  expect_equal(vs_letters, plain_letters)
+})
+
+
+test_that("24. pairwise letters are right when a predictor level starts with '<predictor> - '", {
+  prefix_letters <- pairwise_letters(c("North", "region - South", "East"))
+  expect_equal(prefix_letters, plain_letters)
+})
+
+
+test_that("25. pairwise letters are right when a nested predictor level is called 'Total'", {
+  total_letters <- pairwise_letters(c("North", "South", "Total"))
+  expect_equal(total_letters, plain_letters)
+})
