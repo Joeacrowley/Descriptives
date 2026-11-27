@@ -35,6 +35,9 @@ tables <- list(
 # Every sheet is crosstabbed by these.
 predictors <- c("RSex", "RAgeCat")
 
+# Columns with a base below this show "*" instead of their statistics.
+min_base <- 20
+
 out_file <- here::here("oneway_crosstabs.xlsx")
 
 
@@ -52,7 +55,8 @@ make_crosstab <- function(outcomes) {
   # Each column's name: "Total", or the predictor's variable name and the
   # level, e.g. "RSex: Male". Predictors sharing level names stay apart.
   stats <- stats %>%
-    mutate(column = if_else(cross_break == "Total", "Total", paste0(cross_break, ": ", p_cat1)))
+    mutate(column = if_else(cross_break == "Total", "Total", paste0(cross_break, ": ", p_cat1)),
+           suppressed = base < min_base)
 
   # Columns in the order calc_stats() gives them: Total, then each predictor.
   column_order <- unique(stats$column)
@@ -63,7 +67,7 @@ make_crosstab <- function(outcomes) {
 
   perc_rows <- stats %>%
     filter(stat == "perc") %>%
-    transmute(outcome, o_cat, cat_order, column,
+    transmute(outcome, o_cat, cat_order, column, suppressed,
               `%`         = pct(estimate),
               `95% CI`    = paste(pct(estimate_low), "-", pct(estimate_upp)),
               `Sig. diff` = sig_diff) %>%
@@ -71,12 +75,17 @@ make_crosstab <- function(outcomes) {
 
   count_rows <- stats %>%
     filter(stat == "count") %>%
-    transmute(outcome, o_cat, cat_order, column,
+    transmute(outcome, o_cat, cat_order, column, suppressed,
               Statistics = "Count",
               value      = formatC(unweighted_n, big.mark = ",", format = "d"))
 
   # Wide: one column per predictor level, the statistics grouped by level.
+  # Base suppression: "*" in place of every statistic in a low-base column
+  # (Total's Sig. diff cell stays blank, as it's never tested).
   wide <- bind_rows(perc_rows, count_rows) %>%
+    mutate(value = if_else(suppressed & !(column == "Total" & Statistics == "Sig. diff"),
+                           "*", value)) %>%
+    select(-suppressed) %>%
     mutate(Statistics = factor(Statistics, levels = c("%", "95% CI", "Sig. diff", "Count"))) %>%
     arrange(match(outcome, outcomes), cat_order, Statistics) %>%
     pivot_wider(names_from = column, values_from = value) %>%
@@ -111,8 +120,15 @@ make_crosstab <- function(outcomes) {
     bind_rows(title_row, body_rows, base_row, tibble(Variable = NA_character_))
   })
 
-  # Drop the blank row after the last outcome.
-  outcome_rows <- head(outcome_rows, -1)
+  # A note explaining "*", after the last outcome's blank row - only if
+  # something on this sheet was suppressed. Otherwise drop that blank row.
+  suppression_note <- paste0("* Base below ", min_base, ": estimates not shown.")
+
+  if (any(stats$suppressed)) {
+    outcome_rows <- bind_rows(outcome_rows, tibble(Variable = suppression_note))
+  } else {
+    outcome_rows <- head(outcome_rows, -1)
+  }
 
   bind_rows(letters_row, outcome_rows) %>%
     select(Variable, Statistics, all_of(column_order)) %>%
@@ -120,7 +136,9 @@ make_crosstab <- function(outcomes) {
       Variable %in% "Column reference"   ~ "letters",
       Variable %in% stats$o_lab          ~ "title",
       Variable %in% "Base"               ~ "base",
+      Variable %in% suppression_note     ~ "note",
       Statistics %in% "Count"            ~ "count",
+      is.na(Variable) & is.na(Statistics) ~ "blank",
       TRUE                               ~ "other"
     ))
 }
@@ -154,9 +172,37 @@ write_crosstab_sheet <- function(wb, sheet, table) {
   # Numbers right-aligned, header included.
   style(halign = "right", rows = 1:n_rows, cols = num_cols)
 
-  # Header: bold, with a line above and below.
-  style(textDecoration = "bold", valign = "bottom", border = "TopBottom",
-        borderColour = "#404040", rows = 1, cols = 1:n_cols)
+  # Thin light lines around every cell of the table (not the blank rows
+  # between outcomes, or the note), so rows and columns are easy to follow.
+  table_rows <- setdiff(1:n_rows, c(rows_of("blank"), rows_of("note")))
+  style(border = "TopBottomLeftRight", borderColour = "#BFBFBF", borderStyle = "thin",
+        rows = table_rows, cols = 1:n_cols)
+
+  # Pale blue shading in bands: Variable, Statistics and Total shaded, then
+  # the first predictor's columns plain, the second's shaded, and so on.
+  # A column's predictor is the variable name before ": " in its header.
+  predictor_of  <- str_extract(names(table)[-(1:3)], "^[^:]+")
+  block_number  <- match(predictor_of, unique(predictor_of))
+  shaded_cols   <- c(1:3, (4:n_cols)[block_number %% 2 == 0])
+  style(fgFill = "#EEF4FB", rows = table_rows, cols = shaded_cols)
+
+  # A thicker dark line between two rows. Set on both sides of the line
+  # (the bottom of one row and the top of the next) so it shows either way.
+  thick_line_below <- function(rows) {
+    rows <- rows[rows >= 1]
+    style(border = "bottom", borderColour = "#404040", borderStyle = "medium",
+          rows = rows, cols = 1:n_cols)
+    below <- intersect(rows + 1, table_rows)
+    if (length(below) > 0) {
+      style(border = "top", borderColour = "#404040", borderStyle = "medium",
+            rows = below, cols = 1:n_cols)
+    }
+  }
+
+  # Header: bold, with thick lines above and below.
+  style(textDecoration = "bold", valign = "bottom", border = "top",
+        borderColour = "#404040", borderStyle = "medium", rows = 1, cols = 1:n_cols)
+  thick_line_below(1)
 
   # Column letters in grey italics.
   style(textDecoration = "italic", fontColour = "#595959", rows = rows_of("letters"), cols = 1:n_cols)
@@ -164,12 +210,15 @@ write_crosstab_sheet <- function(wb, sheet, table) {
   # Outcome titles in bold.
   style(textDecoration = "bold", rows = rows_of("title"), cols = 1)
 
-  # A light line under each level's group of rows.
-  style(border = "bottom", borderColour = "#D9D9D9", rows = rows_of("count"), cols = 1:n_cols)
+  # A thick line under each level's group of rows, and above each Base row.
+  thick_line_below(rows_of("count"))
+  thick_line_below(rows_of("base") - 1)
 
-  # Base rows: italic, with a line above.
-  style(textDecoration = "italic", border = "top", borderColour = "#404040",
-        rows = rows_of("base"), cols = 1:n_cols)
+  # Base rows in italics.
+  style(textDecoration = "italic", rows = rows_of("base"), cols = 1:n_cols)
+
+  # The suppression note in italics.
+  style(textDecoration = "italic", rows = rows_of("note"), cols = 1)
 
   # Column widths: enough for the longest entry, up to a limit (longer text
   # wraps). Never narrower than the longest single word, so words don't split.
@@ -193,8 +242,9 @@ write_crosstab_sheet <- function(wb, sheet, table) {
   })
   openxlsx::setRowHeights(wb, sheet, rows = seq_len(n_rows), heights = 13 * row_lines + 2)
 
-  # Keep the header in view when scrolling.
-  openxlsx::freezePane(wb, sheet, firstRow = TRUE)
+  # Keep the header row and the Variable and Statistics columns in view
+  # when scrolling.
+  openxlsx::freezePane(wb, sheet, firstActiveRow = 2, firstActiveCol = 3)
 }
 
 
