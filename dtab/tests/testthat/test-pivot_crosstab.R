@@ -1156,8 +1156,8 @@ test_that("17. format_crosstab() still separates two adjacent NUMERIC variables,
 # (one letter per level column, built from a lookup pivot_crosstab() now
 # returns as its 6th list element, NOT baked into pivoted itself - see
 # reshape_one_predictor_set()'s header note on why) and sig_diff shown as
-# its own inserted row, same mechanic as SE/CI, with SE/CI suppressed
-# entirely whenever sig_diff is present. Test 18 is pivot_crosstab()'s side
+# its own inserted row, same mechanic as SE/CI, and placed under the SE/CI
+# row when both are shown. Test 18 is pivot_crosstab()'s side
 # (the legend element and __sigdiff columns); test 19 checks the NULL/absent
 # case for backward compatibility; test 20 is format_crosstab()'s side (the
 # actual rendered legend row, the Sig. diff row, and SE/CI's absence).
@@ -1203,7 +1203,7 @@ test_that("19. pivot_crosstab() returns a NULL legend and no __sigdiff columns w
   expect_false(any(str_detect(names(pivot_result[[1]]), "__sigdiff")))
 })
 
-test_that("20. format_crosstab() shows the legend as its own first row, a Sig. diff row instead of SE, with the letters matching pivot_crosstab()'s own legend element", {
+test_that("20. format_crosstab() shows the legend as its own first row, an SE row then a Sig. diff row, with the letters matching pivot_crosstab()'s own legend element", {
   data <- tibble(
     response = factor(c(rep("Yes", 16), rep("No", 4), rep("Yes", 4), rep("No", 16)), levels = c("No", "Yes")),
     region   = factor(c(rep("North", 20), rep("South", 20)), levels = c("North", "South")),
@@ -1247,16 +1247,15 @@ test_that("20. format_crosstab() shows the legend as its own first row, a Sig. d
   yes_row <- which(result[["Variable"]] == "Yes")
   expect_true(legend_row < yes_row)
 
-  # No SE row anywhere, even though conf = "se" was requested - suppressed
-  # entirely because pairwise sig_diff is being shown instead (has_pairwise
-  # in format_crosstab()).
-  expect_false("SE" %in% result[["Statistics"]])
+  # An SE row directly below "Yes"'s own estimate row - conf = "se" is
+  # shown alongside the pairwise results.
+  expect_equal(result[["Statistics"]][yes_row + 1], "SE")
 
-  # A "Sig. diff" row directly below "Yes"'s own estimate row, holding the
+  # A "Sig. diff" row below the SE row, holding the
   # OTHER column's letter on each side - North (80% Yes) and South (20%
   # Yes) are clearly significantly different here (same design as test
   # 10/18 in test_add_pairwise_sig.R).
-  yes_diff_row <- yes_row + 1
+  yes_diff_row <- yes_row + 2
   expect_equal(result[["Statistics"]][yes_diff_row], "Sig. diff")
   expect_equal(result[["North"]][yes_diff_row], south_letter)
   expect_equal(result[["South"]][yes_diff_row], north_letter)
@@ -1303,7 +1302,7 @@ test_that("21. format_crosstab() on a fuller, semi-realistic table - two predict
   expect_s3_class(result, "huxtable")
   expect_true("Column reference" %in% result[["Variable"]])
   expect_true("Sig. diff" %in% result[["Statistics"]])
-  expect_false("SE" %in% result[["Statistics"]])
+  expect_true("SE" %in% result[["Statistics"]])
   expect_true(all(c("p_value (sex)", "p_value (age_group)") %in% names(result)))
 })
 
@@ -1360,7 +1359,7 @@ test_that("22. pivot_crosstab() returns a legend (element 6) and __sigdiff colum
   expect_true(any(str_detect(names(result), "__sigdiff")))
 })
 
-test_that("23. format_crosstab() shows a legend row, a Sig. diff row, and suppresses SE for a weighted mean (w_mean) statistic", {
+test_that("23. format_crosstab() shows a legend row, a Sig. diff row, and keeps SE for a weighted mean (w_mean) statistic", {
   data <- tibble(
     score  = c(10, 12, 14, 16, 18, 20, 22, 24, 26, 28,
                80, 82, 84, 86, 88, 90, 92, 94, 96, 98),
@@ -1404,11 +1403,10 @@ test_that("23. format_crosstab() shows a legend row, a Sig. diff row, and suppre
   expect_equal(length(score_row), 1)
   expect_true(legend_row < score_row)
 
-  # No SE row anywhere, even though conf = "se" was requested - suppressed
-  # because sig_diff is being shown instead (has_pairwise).
-  expect_false("SE" %in% result[["Statistics"]])
+  # An SE row directly below the Mean row, then the Sig. diff row.
+  expect_equal(result[["Statistics"]][score_row + 1], "SE")
 
-  diff_row <- score_row + 1
+  diff_row <- score_row + 2
   expect_equal(result[["Statistics"]][diff_row], "Sig. diff")
   expect_equal(result[["North"]][diff_row], south_letter)
   expect_equal(result[["South"]][diff_row], north_letter)
@@ -1443,7 +1441,7 @@ test_that("24. format_crosstab() on a fuller w_mean table - two predictor sets, 
   expect_s3_class(result, "huxtable")
   expect_true("Column reference" %in% result[["Variable"]])
   expect_true("Sig. diff" %in% result[["Statistics"]])
-  expect_false("SE" %in% result[["Statistics"]])
+  expect_true("SE" %in% result[["Statistics"]])
   expect_true(all(c("p_value (sex)", "p_value (age_group)") %in% names(result)))
 })
 
@@ -1480,7 +1478,7 @@ test_that("25. format_crosstab() still inserts a Sig. diff row when a row WAS pa
   expect_true("Sig. diff" %in% result[["Statistics"]])
 
   yes_result_row <- which(result[["Variable"]] == "Yes")
-  diff_row <- yes_result_row + 1
+  diff_row <- yes_result_row + 2
   expect_equal(result[["Statistics"]][diff_row], "Sig. diff")
   # A real "-" value (not a letter - nothing was significant), same literal
   # marker calc_stats() itself stores.
