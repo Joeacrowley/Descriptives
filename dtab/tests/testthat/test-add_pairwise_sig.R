@@ -436,3 +436,51 @@ test_that("25. pairwise letters are right when a nested predictor level is calle
   total_letters <- pairwise_letters(c("North", "South", "Total"))
   expect_equal(total_letters, plain_letters)
 })
+
+
+test_that("26. pairwise letters follow the predictor's level order, even when the first outcome has nobody in a level", {
+  set.seed(1)
+  data <- tibble(
+    region = factor(sample(c("North", "Middle", "South"), 300, TRUE),
+                    levels = c("North", "Middle", "South")),
+    answer = factor(sample(c("Yes", "No"), 300, TRUE))
+  )
+  # Nobody in Middle answered the first outcome.
+  data$answer_no_middle <- factor(if_else(data$region == "Middle", NA, as.character(data$answer)))
+
+  result <- calc_stats(data, outcomes = c("answer_no_middle", "answer"), predictors = "region",
+                       statistics = "perc", pairwise = TRUE)
+  letters_given <- result %>%
+    filter(cross_break == "region", !is.na(sig_letter)) %>%
+    distinct(p_cat1, sig_letter)
+
+  # One letter per level, in the level order: North a, Middle b, South c.
+  expect_equal(nrow(letters_given), 3)
+  expect_equal(letters_given$sig_letter[letters_given$p_cat1 == "North"],  "a")
+  expect_equal(letters_given$sig_letter[letters_given$p_cat1 == "Middle"], "b")
+  expect_equal(letters_given$sig_letter[letters_given$p_cat1 == "South"],  "c")
+})
+
+
+test_that("27. pairwise tests add no rows of their own when an outcome has nobody in a predictor level", {
+  set.seed(1)
+  data <- tibble(
+    region = factor(sample(c("North", "Middle", "South"), 300, TRUE),
+                    levels = c("North", "Middle", "South")),
+    answer = factor(sample(c("Yes", "No"), 300, TRUE))
+  )
+  # Nobody in Middle answered the first outcome.
+  data$answer_no_middle <- factor(if_else(data$region == "Middle", NA, as.character(data$answer)))
+
+  with_pw    <- calc_stats(data, outcomes = c("answer_no_middle", "answer"), predictors = "region",
+                           statistics = "perc", pairwise = TRUE)
+  without_pw <- calc_stats(data, outcomes = c("answer_no_middle", "answer"), predictors = "region",
+                           statistics = "perc")
+
+  # The same rows as without pairwise tests, all with their labels.
+  expect_equal(nrow(with_pw), nrow(without_pw))
+  expect_false(any(is.na(with_pw$p_lab1) | is.na(with_pw$o_lab)))
+
+  # No Middle rows for the first outcome.
+  expect_equal(nrow(filter(with_pw, outcome == "answer_no_middle", p_cat1 == "Middle")), 0)
+})

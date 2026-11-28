@@ -31,9 +31,11 @@ calc_stat_engine <- function(data, outcome, predictors = NULL, stat,
     # Set these rows to "Total"
     mutate(across(contains(c("cross_break", "predictor", "p_lab", "p_cat")),
                   ~ if_else(is.na(.x), "Total", as.character(.x)))) %>%
-    
+    # Total comes before every level.
+    mutate(across(starts_with("p_order"), ~ coalesce(.x, 0L))) %>%
+
     # Set tibble column order.
-    select(contains(c("cross_break", "predictor", "p_lab", "p_cat")),
+    select(contains(c("cross_break", "predictor", "p_lab", "p_cat", "p_order")),
            outcome, o_lab, o_cat, stat, outcome_type, contains("estimate"),
            base, any_of("unweighted_n"))
 
@@ -152,7 +154,11 @@ standardise_names <- function(tbl, data, outcome, predictor) {
     tbl <- tbl %>%
       rename(!!paste0("p_cat", i) := all_of(p)) %>%
       mutate(!!paste0("predictor", i) := .env$p,
-             !!paste0("p_lab", i)     := .env$p_lab)
+             !!paste0("p_lab", i)     := .env$p_lab,
+             # The level's position in the predictor's own order (factor
+             # level order), kept as a number: p_cat becomes plain text
+             # later, which loses it.
+             !!paste0("p_order", i)   := as.integer(as.factor(.data[[paste0("p_cat", i)]])))
   }
 
   # Always present: "Total" when there's no predictor, so downstream code

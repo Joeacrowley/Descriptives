@@ -303,7 +303,9 @@ add_letters <- function(calc_stats_df){
   letter_codes <- c(letters, as.vector(t(outer(letters, letters, paste0))))[1:260]
 
   cs_df_letters <-
-    calc_stats_df %>% select(cross_break, contains("p_cat")) %>% unique %>%
+    calc_stats_df %>% select(cross_break, contains("p_cat"), contains("p_order")) %>% unique %>%
+    # Letters in the predictor's own level order, not the order rows appear.
+    arrange(across(contains("p_order"))) %>%
     group_by(cross_break) %>% mutate(sig_letter =
       case_when(cross_break != "Total" ~ letter_codes[row_number()]),
       .after = cross_break)
@@ -490,8 +492,11 @@ add_pairwise_sig <- function(merged_tables, data, outcomes, predictors, statisti
   # statistic (e.g. count alongside perc) aren't marked "-".
   tested_stats <- ready_to_merge %>% distinct(outcome, stat) %>% mutate(stat_tested = TRUE)
 
+  # left_join: the results only attach to rows calc_stats() already has. A
+  # predictor level nobody answered this outcome in still gets test results
+  # (all "not tested"), but no rows of its own.
   merged_tables %>%
-    full_join(ready_to_merge) %>%
+    left_join(ready_to_merge) %>%
     left_join(tested_stats, by = c("outcome", "stat")) %>%
     mutate(sig_diff = case_when(
       # Couldn't be tested against any other group (too few cases).

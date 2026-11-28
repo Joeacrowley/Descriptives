@@ -987,3 +987,38 @@ test_that("49. calc_stats() uses the t distribution, not 1.96, for unweighted me
   expect_equal(sum_row$estimate_low, sum(data$x) - t * sum_se)
   expect_equal(sum_row$estimate_upp, sum(data$x) + t * sum_se)
 })
+
+
+test_that("50. calc_stats() gives each predictor level its place in the factor's level order (p_order1), with Total as 0", {
+  # Levels deliberately not in alphabetical order, or the order they appear.
+  data <- tibble(
+    answer = factor(c("Yes", "No", "Yes", "No", "Yes", "No")),
+    region = factor(c("South", "South", "North", "North", "Middle", "Middle"),
+                    levels = c("North", "Middle", "South"))
+  )
+
+  result <- calc_stats(data, outcomes = "answer", predictors = "region", statistics = "perc")
+  orders <- result %>% distinct(p_cat1, p_order1)
+
+  expect_equal(orders$p_order1[orders$p_cat1 == "Total"],  0L)
+  expect_equal(orders$p_order1[orders$p_cat1 == "North"],  1L)
+  expect_equal(orders$p_order1[orders$p_cat1 == "Middle"], 2L)
+  expect_equal(orders$p_order1[orders$p_cat1 == "South"],  3L)
+})
+
+
+test_that("51. calc_stats() gives a nested predictor set a p_order for each predictor", {
+  data <- tibble(
+    answer = factor(rep(c("Yes", "No"), 8)),
+    sex    = factor(rep(c("Male", "Female"), each = 8), levels = c("Male", "Female")),
+    region = factor(rep(c("South", "North"), each = 4, times = 2), levels = c("North", "South"))
+  )
+
+  result <- calc_stats(data, outcomes = "answer", predictors = list(c("sex", "region")),
+                       statistics = "perc")
+  orders <- result %>% filter(cross_break != "Total") %>% distinct(p_cat1, p_order1, p_cat2, p_order2)
+
+  expect_equal(orders$p_order1[orders$p_cat1 == "Female"][1], 2L)
+  expect_equal(orders$p_order2[orders$p_cat2 == "North"][1],  1L)
+  expect_equal(orders$p_order2[orders$p_cat2 == "South"][1],  2L)
+})
