@@ -65,7 +65,10 @@ calc_stat_engine <- function(data, outcome, predictors = NULL, stat,
     # Factor level order, or 
     # Order that numeric statistics appear in stat_registry.
     mutate(cat_order = if (spec$type == "categorical") as.integer(o_cat)
-                       else match(.env$stat, names(stat_registry)))
+                       else match(.env$stat, names(stat_registry))) %>%
+    # o_cat as text, now cat_order has its level order. Otherwise it's a
+    # factor or text depending on what calc_stats() later stacks it with.
+    mutate(o_cat = as.character(o_cat))
 }
 
 

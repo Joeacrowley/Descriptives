@@ -1022,3 +1022,22 @@ test_that("51. calc_stats() gives a nested predictor set a p_order for each pred
   expect_equal(orders$p_order2[orders$p_cat2 == "North"][1],  1L)
   expect_equal(orders$p_order2[orders$p_cat2 == "South"][1],  2L)
 })
+
+
+test_that("52. calc_stats() always gives o_cat as text, keeping the categories' level order in cat_order", {
+  # One categorical outcome on its own: the case where o_cat used to stay a factor.
+  data <- tibble(
+    answer = factor(c("Yes", "No", "Yes", "Maybe"), levels = c("Yes", "No", "Maybe")),
+    group  = factor(c("A", "A", "B", "B"))
+  )
+
+  result <- calc_stats(data, outcomes = "answer", predictors = "group", statistics = "perc")
+
+  expect_type(result$o_cat, "character")
+
+  # The level order is still there, in cat_order.
+  orders <- result %>% distinct(o_cat, cat_order)
+  expect_equal(orders$cat_order[orders$o_cat == "Yes"],   1L)
+  expect_equal(orders$cat_order[orders$o_cat == "No"],    2L)
+  expect_equal(orders$cat_order[orders$o_cat == "Maybe"], 3L)
+})
