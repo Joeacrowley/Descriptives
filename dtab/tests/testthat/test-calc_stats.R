@@ -925,3 +925,65 @@ test_that("46. calc_stats() gives unweighted percentages a Wilson CI: within 0-1
   # Every interval stays within 0-1.
   expect_true(all(result$estimate_low >= 0 & result$estimate_upp <= 1))
 })
+
+
+test_that("47. calc_stats() gives unweighted counts a Wilson CI: within 0 and the base, and not '0 - 0' for an empty category", {
+  # Same data as test 46: group A has 1 Yes out of 40, and nobody said "Maybe".
+  data <- tibble(
+    answer = factor(c("Yes", rep("No", 39), rep("Yes", 20), rep("No", 20)),
+                    levels = c("Yes", "No", "Maybe")),
+    group  = factor(rep(c("A", "B"), each = 40))
+  )
+
+  result <- calc_stats(data, outcomes = "answer", predictors = "group",
+                       statistics = "count", conf = "ci")
+  group_a <- result %>% filter(cross_break == "group", p_cat1 == "A")
+
+  # The percentage's Wilson interval, times the base.
+  a_yes  <- group_a %>% filter(o_cat == "Yes")
+  wilson <- prop.test(1, 40, correct = FALSE)$conf.int * 40
+  expect_equal(a_yes$estimate_low, wilson[1])
+  expect_equal(a_yes$estimate_upp, wilson[2])
+
+  # The empty category: from 0 up to a real upper limit, not "0 - 0".
+  a_maybe <- group_a %>% filter(o_cat == "Maybe")
+  expect_equal(a_maybe$estimate_low, 0)
+  expect_equal(a_maybe$estimate_upp, prop.test(0, 40, correct = FALSE)$conf.int[2] * 40)
+
+  # Every interval stays between 0 and the base.
+  expect_true(all(result$estimate_low >= 0 & result$estimate_upp <= result$base))
+})
+
+
+test_that("48. calc_stats() leaves the CI empty for an empty category of a weighted statistic, rather than '0 - 0'", {
+  svy <- tibble(
+    answer = factor(c(rep("Yes", 20), rep("No", 20)), levels = c("Yes", "No", "Maybe")),
+    w      = rep(c(1, 2), 20)
+  ) %>% as_survey_design(weight = w)
+
+  for (stat in c("w_perc", "w_count")) {
+    result <- calc_stats(svy, outcomes = "answer", statistics = stat, conf = "ci")
+    maybe  <- result %>% filter(o_cat == "Maybe")
+    expect_equal(maybe$estimate, 0)
+    expect_true(is.na(maybe$estimate_ci))
+
+    # Categories with people in them still get a CI.
+    expect_false(any(is.na(result$estimate_ci[result$o_cat != "Maybe"])))
+  }
+})
+
+
+test_that("49. calc_stats() uses the t distribution, not 1.96, for unweighted mean and sum CIs", {
+  data <- tibble(x = c(2, 4, 4, 5, 7))
+  n    <- 5
+  t    <- qt(0.975, n - 1)
+
+  mean_row <- calc_stats(data, outcomes = "x", statistics = "mean", conf = "ci")
+  expect_equal(mean_row$estimate_low, t.test(data$x)$conf.int[1])
+  expect_equal(mean_row$estimate_upp, t.test(data$x)$conf.int[2])
+
+  sum_row <- calc_stats(data, outcomes = "x", statistics = "sum", conf = "ci")
+  sum_se  <- sd(data$x) * sqrt(n)
+  expect_equal(sum_row$estimate_low, sum(data$x) - t * sum_se)
+  expect_equal(sum_row$estimate_upp, sum(data$x) + t * sum_se)
+})

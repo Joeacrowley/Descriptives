@@ -89,28 +89,33 @@ one_table <- function(data, outcome, predictor, stat, spec, conf) {
 
   # Bring back outcome categories nobody picked as 0 rows, within each
   # predictor group only - so empty predictor cells stay out.
+  # Their CI is left empty (NA) here, rather than "0 - 0": unweighted stats
+  # get one below, but weighted ones have nothing to base one on.
   if (categorical) {
     tbl <- tbl %>%
       group_by(across(all_of(predictor))) %>%
       complete(!!sym(outcome),
                # Fill missing factor levels with these values...
                fill = list(
-                 estimate = 0, 
-                 estimate_se = 0, 
-                 estimate_low = 0,
-                 estimate_upp = 0, 
+                 estimate = 0,
+                 estimate_se = 0,
                  unweighted_n = 0)
                ) %>%
       mutate(base = max(base, na.rm = TRUE)) %>%   # new rows take their group's base
       ungroup()
   }
 
-  # Unweighted percentages: the 0% rows just added get a Wilson interval
-  # too (0 up to a small upper limit), rather than "0 - 0".
+  # Unweighted percentages and counts: the empty rows just added get a
+  # Wilson interval too (0 up to a small upper limit).
   if (categorical && stat == "perc") {
     tbl <- tbl %>%
       mutate(estimate_low = wilson_ci(unweighted_n, base)$low,
              estimate_upp = wilson_ci(unweighted_n, base)$upp)
+  }
+  if (categorical && stat == "count") {
+    tbl <- tbl %>%
+      mutate(estimate_low = wilson_ci(unweighted_n, base)$low * base,
+             estimate_upp = wilson_ci(unweighted_n, base)$upp * base)
   }
 
   # Numeric stats have no real category, so o_cat holds the stat name.

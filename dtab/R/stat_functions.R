@@ -21,8 +21,9 @@ stat_mean <- function(grouped, outcome, conf) {
     summarise(estimate     = mean(.data[[outcome]], na.rm = TRUE),
               base         = n(),
               estimate_se  = sd(.data[[outcome]], na.rm = TRUE) / sqrt(base),
-              estimate_low = estimate - 1.96 * estimate_se,
-              estimate_upp = estimate + 1.96 * estimate_se,
+              # t rather than 1.96, so small groups get a wider interval.
+              estimate_low = estimate - qt(0.975, base - 1) * estimate_se,
+              estimate_upp = estimate + qt(0.975, base - 1) * estimate_se,
               .groups      = "drop") # Always return an ungrouped tibble.
 }
 
@@ -71,8 +72,9 @@ stat_sum <- function(grouped, outcome, conf) {
     summarise(estimate     = sum(.data[[outcome]], na.rm = TRUE),
               base         = n(),
               estimate_se  = sd(.data[[outcome]], na.rm = TRUE) * sqrt(base),
-              estimate_low = estimate - 1.96 * estimate_se,
-              estimate_upp = estimate + 1.96 * estimate_se,
+              # t rather than 1.96, as for the mean.
+              estimate_low = estimate - qt(0.975, base - 1) * estimate_se,
+              estimate_upp = estimate + qt(0.975, base - 1) * estimate_se,
               .groups      = "drop")
 }
 
@@ -163,7 +165,7 @@ stat_w_sd <- function(grouped, outcome, conf) {
 # 100%. correct = FALSE gives the Wilson interval; suppressWarnings() hides
 # the "Chi-squared approximation may be incorrect" warning for small counts.
 wilson_ci <- function(x, n) {
-  ci <- map2(x, n, \(x, n) suppressWarnings(stats::prop.test(x, n, correct = FALSE))$conf.int)
+  ci <- map2(x, n, function(x, n) suppressWarnings(stats::prop.test(x, n, correct = FALSE))$conf.int)
   list(low = map_dbl(ci, 1), upp = map_dbl(ci, 2))
 }
 
@@ -198,8 +200,10 @@ stat_count <- function(grouped, outcome, conf) {
            unweighted_n = estimate,
            prop         = estimate / base,
            estimate_se  = sqrt(base * prop * (1 - prop)),
-           estimate_low = estimate - 1.96 * estimate_se,
-           estimate_upp = estimate + 1.96 * estimate_se) %>%
+           # The percentage's Wilson interval, scaled up to a count, so it
+           # stays between 0 and the base.
+           estimate_low = wilson_ci(estimate, base)$low * base,
+           estimate_upp = wilson_ci(estimate, base)$upp * base) %>%
     select(-prop) %>%
     ungroup()
 }
