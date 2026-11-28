@@ -315,6 +315,13 @@ add_letters <- function(calc_stats_df){
   calc_stats_df
 }
 
+# Puts letters in column order: a ... z, then aa, ab ... - the order
+# add_letters() hands them out. A plain sort() would give a, aa, ab, b.
+# order() sorts by the first thing it's given (the length), and breaks ties
+# with the second (the letter), so one-letter codes come first, each length
+# alphabetical. E.g. c("b", "aa", "a") gives "a", "b", "aa".
+sort_letters <- function(x) x[order(nchar(x), x)]
+
 merge_p_letters <- function(one_pw_test_set, calc_stats_df, crit_lev = 0.05,
                             p_adjust_method = "BH"){
 
@@ -378,8 +385,10 @@ merge_p_letters <- function(one_pw_test_set, calc_stats_df, crit_lev = 0.05,
            significant = tested & p_value < crit_lev) %>%
     group_by(cross_break, sig_letter, outcome, o_cat, predictor, p_cat1, p_cat2, across(any_of("stat"))) %>%
     summarise(
-      sig_diff     = paste0(comparison_letter[significant], collapse = ", "),
-      sig_untested = paste0(comparison_letter[!tested], collapse = ", "),
+      # Letters in column order. They arrive in the order the comparisons
+      # were made, which for a nested set is inner level first (a, d, b).
+      sig_diff     = paste0(sort_letters(comparison_letter[significant]), collapse = ", "),
+      sig_untested = paste0(sort_letters(comparison_letter[!tested]),     collapse = ", "),
       sig_method   = paste0(unique(method[tested]), collapse = "; "),
       .groups = "drop"
     ) %>%

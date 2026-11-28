@@ -484,3 +484,33 @@ test_that("27. pairwise tests add no rows of their own when an outcome has nobod
   # No Middle rows for the first outcome.
   expect_equal(nrow(filter(with_pw, outcome == "answer_no_middle", p_cat1 == "Middle")), 0)
 })
+
+
+test_that("28. Sig. diff letters are in column order for a nested set", {
+  # Sex x age group, 100 people per column. Male 60+ (column c) mostly say
+  # Yes; everyone else mostly says No, so c differs from all five others.
+  # The comparisons arrive age group first (a, d, b, e, f), so the letters
+  # need sorting.
+  cell <- function(sex, age, n_yes) {
+    tibble(sex = sex, age_group = age,
+           answer = c(rep("Yes", n_yes), rep("No", 100 - n_yes)))
+  }
+  data <- bind_rows(cell("Male",   "18-34", 20), cell("Male",   "35-59", 20), cell("Male",   "60+", 90),
+                    cell("Female", "18-34", 20), cell("Female", "35-59", 20), cell("Female", "60+", 20)) %>%
+    mutate(sex       = factor(sex, levels = c("Male", "Female")),
+           age_group = factor(age_group),
+           answer    = factor(answer))
+
+  result <- calc_stats(data, outcomes = "answer", predictors = list(c("sex", "age_group")),
+                       statistics = "perc", pairwise = TRUE)
+  male_60 <- result %>% filter(p_cat1 == "Male", p_cat2 == "60+", o_cat == "Yes")
+
+  expect_equal(male_60$sig_letter, "c")
+  expect_equal(male_60$sig_diff, "a, b, d, e, f")
+})
+
+
+test_that("29. sort_letters() puts letters in column order: a ... z, then aa, ab ...", {
+  expect_equal(sort_letters(c("b", "aa", "a")), c("a", "b", "aa"))
+  expect_equal(sort_letters(c("ab", "z", "aa", "c")), c("c", "z", "aa", "ab"))
+})
