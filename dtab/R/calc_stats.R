@@ -249,6 +249,12 @@ calc_stats <- function(
          paste(clashes, collapse = ", "), ".")
   }
 
+  # "Total" fills the predictor columns of the Total table, so a predictor
+  # can't be called that: its rows would look like the Total table's.
+  if ("Total" %in% unlist(predictors)) {
+    stop("A predictor can't be called \"Total\" - please rename it.")
+  }
+
   if (!is.null(predictors)) {
     if (!isTRUE(outcomes_not_in_predictors(outcomes = outcomes, predictors = predictors))) {
       stop("Outcome appears in predictor list.")

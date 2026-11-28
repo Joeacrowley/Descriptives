@@ -1041,3 +1041,27 @@ test_that("52. calc_stats() always gives o_cat as text, keeping the categories' 
   expect_equal(orders$cat_order[orders$o_cat == "No"],    2L)
   expect_equal(orders$cat_order[orders$o_cat == "Maybe"], 3L)
 })
+
+
+test_that("53. calc_stats() stops if a predictor is called \"Total\"", {
+  # "Total" fills the Total table's predictor columns, so a predictor with
+  # that name would be mixed up with it.
+  data <- tibble(
+    answer = factor(c("Yes", "No", "Yes", "No")),
+    Total  = factor(c("A", "A", "B", "B")),
+    sex    = factor(c("Male", "Female", "Male", "Female"))
+  )
+
+  # On its own, and as the inner predictor of a nested set.
+  expect_error(calc_stats(data, outcomes = "answer", predictors = "Total",
+                          statistics = "perc"),
+               "can't be called \"Total\"")
+  expect_error(calc_stats(data, outcomes = "answer", predictors = list(c("sex", "Total")),
+                          statistics = "perc"),
+               "can't be called \"Total\"")
+
+  # A level called "Total" is fine: nothing mistakes a level for the Total table.
+  data$sex <- factor(c("Total", "Female", "Total", "Female"))
+  expect_no_error(calc_stats(data, outcomes = "answer", predictors = "sex",
+                             statistics = "perc"))
+})
